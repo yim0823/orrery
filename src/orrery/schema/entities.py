@@ -1,0 +1,64 @@
+"""World schema: entity and relation types.
+
+Deliberately small. Every entity has an id, a kind, a status, free-form attributes and provenance.
+Type-specific fields live in `attrs` until a model needs them to be first-class.
+"""
+from __future__ import annotations
+
+from enum import StrEnum
+from typing import Any
+
+from pydantic import BaseModel, Field
+
+
+class EntityKind(StrEnum):
+    SITE = "site"  # an IDC, a cloud region, an availability zone
+    RACK = "rack"
+    HOST = "host"  # physical server or VM
+    CLUSTER = "cluster"  # e.g. a Kubernetes cluster
+    NODE = "node"  # a cluster member
+    SERVICE = "service"  # a deployable workload
+    DATABASE = "database"
+    LOAD_BALANCER = "load_balancer"
+    NETWORK_SEGMENT = "network_segment"  # VLAN, subnet, VPC
+    EXTERNAL = "external"  # third-party dependency we do not model internally
+
+
+class RelationKind(StrEnum):
+    RUNS_ON = "RUNS_ON"  # service -> node/host ; node -> host ; host -> rack
+    DEPENDS_ON = "DEPENDS_ON"  # service -> service/database/external/load_balancer
+    CONNECTS_TO = "CONNECTS_TO"  # host/node -> network_segment
+    MEMBER_OF = "MEMBER_OF"  # node -> cluster ; service -> load_balancer pool
+    HOSTED_IN = "HOSTED_IN"  # rack/host/cluster/segment -> site
+
+
+class Status(StrEnum):
+    UP = "up"
+    DEGRADED = "degraded"
+    DOWN = "down"
+    UNKNOWN = "unknown"
+
+
+class Provenance(BaseModel):
+    """Where a fact came from. Every entity and relation carries at least one."""
+
+    source: str  # connector name
+    source_id: str  # the id in that source
+    observed_at: str | None = None  # ISO 8601
+
+
+class Entity(BaseModel):
+    id: str
+    kind: EntityKind
+    name: str
+    status: Status = Status.UP
+    attrs: dict[str, Any] = Field(default_factory=dict)
+    provenance: list[Provenance] = Field(default_factory=list)
+
+
+class Relation(BaseModel):
+    src: str
+    dst: str
+    kind: RelationKind
+    attrs: dict[str, Any] = Field(default_factory=dict)
+    provenance: list[Provenance] = Field(default_factory=list)

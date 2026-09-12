@@ -1,0 +1,41 @@
+# Synthetic world. Nothing here corresponds to any real company.
+entities:
+  - {id: site-a, kind: site, name: "Site A (IDC)"}
+  - {id: site-b, kind: site, name: "Site B (cloud region)"}
+  - {id: host-a1, kind: host, name: "a1", attrs: {cpu: 32, mem_gb: 128}}
+  - {id: host-a2, kind: host, name: "a2", attrs: {cpu: 32, mem_gb: 128}}
+  - {id: host-b1, kind: host, name: "b1", attrs: {cpu: 16, mem_gb: 64}}
+  - {id: k8s-main, kind: cluster, name: "main"}
+  - {id: node-a1, kind: node, name: "node-a1"}
+  - {id: node-a2, kind: node, name: "node-a2"}
+  - {id: node-b1, kind: node, name: "node-b1"}
+  - {id: svc-web, kind: service, name: "web", attrs: {replicas: 3}}
+  - {id: svc-checkout, kind: service, name: "checkout", attrs: {replicas: 2}}
+  - {id: svc-inventory, kind: service, name: "inventory", attrs: {replicas: 1}}
+  - {id: svc-inventory-prod, kind: service, name: "inventory-prod", attrs: {replicas: 1}}  # same thing, other system's name
+  - {id: db-orders, kind: database, name: "orders", attrs: {engine: postgres, replica: true}}
+  - {id: db-stock, kind: database, name: "stock", attrs: {engine: mysql, replica: false}}
+  - {id: lb-edge, kind: load_balancer, name: "edge"}
+  - {id: ext-payments, kind: external, name: "payments provider"}
+relations:
+  - {src: host-a1, dst: site-a, kind: HOSTED_IN}
+  - {src: host-a2, dst: site-a, kind: HOSTED_IN}
+  - {src: host-b1, dst: site-b, kind: HOSTED_IN}
+  - {src: node-a1, dst: host-a1, kind: RUNS_ON}
+  - {src: node-a2, dst: host-a2, kind: RUNS_ON}
+  - {src: node-b1, dst: host-b1, kind: RUNS_ON}
+  - {src: node-a1, dst: k8s-main, kind: MEMBER_OF}
+  - {src: node-a2, dst: k8s-main, kind: MEMBER_OF}
+  - {src: node-b1, dst: k8s-main, kind: MEMBER_OF}
+  - {src: svc-web, dst: node-a1, kind: RUNS_ON}
+  - {src: svc-web, dst: node-b1, kind: RUNS_ON}
+  - {src: svc-checkout, dst: node-a2, kind: RUNS_ON}
+  - {src: svc-inventory, dst: node-a1, kind: RUNS_ON}
+  - {src: db-orders, dst: host-a2, kind: RUNS_ON}
+  - {src: db-stock, dst: host-a1, kind: RUNS_ON}
+  - {src: svc-web, dst: svc-checkout, kind: DEPENDS_ON}
+  - {src: svc-checkout, dst: db-orders, kind: DEPENDS_ON}
+  - {src: svc-checkout, dst: svc-inventory, kind: DEPENDS_ON}
+  - {src: svc-checkout, dst: ext-payments, kind: DEPENDS_ON}
+  - {src: svc-inventory, dst: db-stock, kind: DEPENDS_ON}
+  - {src: svc-web, dst: lb-edge, kind: MEMBER_OF}
