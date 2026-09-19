@@ -63,6 +63,14 @@ class World:
     def in_edges(self, entity_id: str, kind: RelationKind) -> list[str]:
         return [u for u, _, k in self.g.in_edges(entity_id, keys=True) if k == kind.value]
 
+    def in_relations(self, entity_id: str, kind: RelationKind) -> list[Relation]:
+        """Incoming edges as relations, so callers can read strength and attrs."""
+        return [
+            d["relation"]
+            for _, _, k, d in self.g.in_edges(entity_id, keys=True, data=True)
+            if k == kind.value
+        ]
+
     # ---- state ----
     def set_status(self, entity_id: str, status: Status) -> None:
         self.entity(entity_id).status = status

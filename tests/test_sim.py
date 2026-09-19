@@ -24,7 +24,9 @@ def test_db_without_replica_kills_single_replica_service():
     assert w.entity("db-stock").status == Status.DOWN
     assert w.entity("svc-inventory").status == Status.DOWN
     assert w.entity("svc-checkout").status == Status.DOWN  # hard dep down
-    assert w.entity("svc-web").status == Status.DOWN
+    # The storefront depends on checkout softly: it keeps serving pages, you just
+    # cannot buy. Before soft dependencies existed this asserted DOWN.
+    assert w.entity("svc-web").status == Status.DEGRADED
 
 
 def test_losing_one_node_degrades_multi_replica_service():

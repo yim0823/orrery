@@ -51,10 +51,11 @@ uv run orrery simulate host-a1
 
 In rough order of value:
 
-1. **Soft dependencies.** `orrery backtest fixtures/incidents` reports three
-   `overstated` results, all the same cause: a service that queues and retries when a
-   dependency dies is modeled as dying with it. Relations need a strength, and
-   behavior models need to read it. This is the gap the harness was built to expose.
+1. **A time dimension for soft dependencies.** `orrery backtest fixtures/incidents`
+   reports one `understated` result, and `INC-0004` is why: a soft dependency is soft
+   only for a while. A checkout service queues and retries when its payment provider
+   dies, then the queue fills and it stops. `propagate()` has no clock, so it cannot
+   express "soft for forty minutes, hard after that".
 2. **Event severity in propagation.** Today, when a degrade and a down reach the same
    entity, arrival order decides the outcome. Events need severity so the stronger one
    wins regardless of order.

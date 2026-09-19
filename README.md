@@ -116,6 +116,25 @@ Five relation kinds. The arrow always points **from the dependent to the depende
 The first four propagate impact. `CONNECTS_TO` does not — communication is symmetric
 and does not imply "if A dies, B dies".
 
+### Hard and soft dependencies
+
+Not everything you depend on is load-bearing. Lose your primary database and you stop.
+Lose a payment provider and, if you queue and retry, you keep taking orders — the cart
+still works, confirmation is just late.
+
+```yaml
+relations:
+  - {src: svc-checkout, dst: db-orders,    kind: DEPENDS_ON}                   # hard
+  - {src: svc-checkout, dst: ext-payments, kind: DEPENDS_ON, strength: soft}
+```
+
+A soft edge **caps what crosses it at "degraded"**. It weakens the consequence; it does
+not silence it. A storefront whose checkout is slow is itself slow.
+
+`strength` defaults to `hard`, deliberately. Marking something soft when it is not hides
+a real outage; marking something hard when it is not produces a false alarm. The first
+failure hurts people, the second annoys them — so when in doubt, leave it hard.
+
 ### Connectors
 
 orrery ships the **interface**, not implementations. Connectors to your CMDB,
@@ -193,25 +212,26 @@ Early alpha, `0.0.1`. Honest picture:
 | Entity/relation model, YAML ingest | Connectors to real systems (you write them) |
 | Structural blast radius | Visualization — terminal output only |
 | Behavioral propagation with per-kind models | Snapshot diffing over time |
-| Entity-resolution candidates | Severity weighting — binary up/down only |
+| Entity-resolution candidates | Event severity — arrival order can decide the result |
 | Four-axis agent trust rubric | Scenario runner (format defined, runner missing) |
-| Backtesting harness | Soft dependencies — see below |
+| Backtesting harness | A clock — soft dependencies are soft only for a while |
+| Hard and soft dependencies | |
 
 **Accuracy is the open problem, and there is now a way to measure it.**
 
 ```console
 $ orrery backtest fixtures/incidents
 
-backtest: 3 incident(s), 12 prediction(s) scored
-  36 entit(ies) skipped — the records say nothing about them
+backtest: 4 incident(s), 15 prediction(s) scored
+  49 entit(ies) skipped — the records say nothing about them
 
   recall    100%   of what broke, we predicted broken
   precision 100%   of what we predicted, actually broke
-  exact      75%   severity exactly right
+  exact      93%   severity exactly right
 
-  hit             7   predicted, right severity
-  correct up      2   agreed it was unaffected
-  overstated      3   said down, was degraded
+  hit            11   predicted, right severity
+  correct up      3   agreed it was unaffected
+  understated     1   said degraded, was down
   false alarm     0   said broken, was fine
   MISS            0   said fine, was broken
 
@@ -227,10 +247,17 @@ and the engine grades itself. Two design choices matter:
 - **Severity counts.** Predicting "down" when something merely degraded is not a hit. It
   is `overstated`, and it is why the demo scores 100% recall but 75% exact.
 
-Those three `overstated` results are a real gap, not noise: orrery has no notion of a
-**soft dependency**. A checkout service that queues and retries payments survives its
-payment provider going away; the engine says it dies. `fixtures/incidents/INC-0003.yaml`
-exists to keep that failure visible.
+The harness earned its keep on its first run. It reported three `overstated` results,
+all one cause — orrery had no notion of a soft dependency, so a checkout service that
+queues and retries payments was modeled as dying with its payment provider. Soft
+dependencies exist now, and those three are hits.
+
+The one `understated` result left is the next gap, kept deliberately in
+`fixtures/incidents/INC-0004.yaml`: **a soft dependency is soft only for a while.** When
+the payment provider stayed down for four hours, the retry queue filled and checkout
+stopped for real. `propagate()` has no clock, so it cannot say "soft for forty minutes,
+hard after that". A backtest containing only incidents the engine already handles
+measures nothing.
 
 Until you have run this against your own incidents, treat the output as advisory and say
 so to anyone who asks.

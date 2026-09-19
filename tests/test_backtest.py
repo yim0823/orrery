@@ -37,7 +37,7 @@ def test_loads_incident_and_resolves_world_relative_to_the_record():
 def test_load_dir_skips_the_world_snapshot():
     incidents = Incident.load_dir(FIXTURES)
     ids = [i.id for i in incidents]
-    assert ids == ["INC-0001", "INC-0002", "INC-0003"]
+    assert ids == ["INC-0001", "INC-0002", "INC-0003", "INC-0004"]
 
 
 def test_replay_scores_only_observed_entities_by_default():
@@ -66,14 +66,25 @@ def test_assume_unlisted_up_widens_the_graded_set():
     assert wide > narrow
 
 
-def test_known_engine_gap_shows_up_as_overstated_not_as_a_pass():
-    # INC-0003 exists because the engine has no notion of a soft dependency.
-    # If this ever becomes a HIT, the engine learned something — update the fixture.
+def test_soft_dependency_is_now_handled():
+    # INC-0003 used to fail: the engine killed checkout when its payment provider died.
+    # Soft dependencies fixed that, so this now asserts the correct behavior instead.
     cmp = replay(Incident.load(FIXTURES / "INC-0003.yaml"))
     checkout = next(j for j in cmp.judgements if j.entity_id == "svc-checkout")
     assert checkout.actual is Status.DEGRADED
-    assert checkout.predicted is Status.DOWN
-    assert checkout.outcome is Outcome.OVERSTATED
+    assert checkout.predicted is Status.DEGRADED
+    assert checkout.outcome is Outcome.HIT
+
+
+def test_known_engine_gap_stays_visible():
+    # INC-0004 is the gap that remains: a soft dependency is soft only for a while, and
+    # propagate() has no time dimension. If this ever becomes a HIT, the engine learned
+    # something — update the fixture rather than deleting the test.
+    cmp = replay(Incident.load(FIXTURES / "INC-0004.yaml"))
+    checkout = next(j for j in cmp.judgements if j.entity_id == "svc-checkout")
+    assert checkout.actual is Status.DOWN
+    assert checkout.predicted is Status.DEGRADED
+    assert checkout.outcome is Outcome.UNDERSTATED
 
 
 def test_no_misses_on_the_demo_fixtures():
@@ -92,7 +103,7 @@ def test_recall_and_precision_are_pooled_not_averaged():
 
 def test_exact_rate_penalizes_wrong_severity():
     report = run(Incident.load_dir(FIXTURES))
-    assert report.total(Outcome.OVERSTATED) > 0
+    assert report.total(Outcome.UNDERSTATED) > 0
     assert report.exact_rate() is not None
     assert report.exact_rate() < 1.0
 

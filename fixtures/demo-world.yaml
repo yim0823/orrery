@@ -33,9 +33,11 @@ relations:
   - {src: svc-inventory, dst: node-a1, kind: RUNS_ON}
   - {src: db-orders, dst: host-a2, kind: RUNS_ON}
   - {src: db-stock, dst: host-a1, kind: RUNS_ON}
-  - {src: svc-web, dst: svc-checkout, kind: DEPENDS_ON}
+  # the storefront still serves pages when checkout is broken; you just cannot buy
+  - {src: svc-web, dst: svc-checkout, kind: DEPENDS_ON, strength: soft}
   - {src: svc-checkout, dst: db-orders, kind: DEPENDS_ON}
   - {src: svc-checkout, dst: svc-inventory, kind: DEPENDS_ON}
-  - {src: svc-checkout, dst: ext-payments, kind: DEPENDS_ON}
+  # checkout queues orders and retries when the payment provider is gone
+  - {src: svc-checkout, dst: ext-payments, kind: DEPENDS_ON, strength: soft}
   - {src: svc-inventory, dst: db-stock, kind: DEPENDS_ON}
   - {src: svc-web, dst: lb-edge, kind: MEMBER_OF}

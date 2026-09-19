@@ -1,0 +1,19 @@
+# Synthetic. Included because the engine still gets this one wrong.
+id: INC-0004
+title: "Payment provider down four hours; checkout's retry queue filled and it stopped"
+occurred_at: "2026-08-08T11:20:00+09:00"
+world: world.yaml
+trigger: ext-payments
+event: down
+observed:
+  svc-checkout: down      # degraded for ~40 minutes, then the queue filled
+  svc-web: degraded
+  svc-inventory: up
+notes: |
+  Same trigger as INC-0003 and a different outcome, because the outage lasted longer.
+  A soft dependency is soft up to a point: checkout queued and retried, then ran out of
+  room and stopped accepting orders.
+
+  propagate() has no time dimension, so it cannot express "soft for 40 minutes, hard
+  after that". It predicts degraded and is understated here. Kept on purpose — a
+  backtest of only the incidents the engine already handles measures nothing.

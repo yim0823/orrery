@@ -50,8 +50,12 @@ class ServiceModel:
         if event in ("down", "dependency_down"):
             return Effect(entity.id, Status.DOWN, emit=["dependency_down"], note="hard dep down")
         if event == "dependency_degraded":
-            st = Status.DEGRADED if replicas > 1 else Status.DOWN
-            return Effect(entity.id, st, emit=["dependency_degraded"])
+            # Your own replica count does not help when something you depend on is slow —
+            # every replica talks to the same degraded thing. Replicas matter for losing
+            # a node you run on, which is `node_lost` below.
+            return Effect(
+                entity.id, Status.DEGRADED, emit=["dependency_degraded"], note="dep degraded"
+            )
         if event == "node_lost":
             # losing one node out of N degrades; losing the last one kills
             return Effect(

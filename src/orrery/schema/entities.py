@@ -32,6 +32,21 @@ class RelationKind(StrEnum):
     HOSTED_IN = "HOSTED_IN"  # rack/host/cluster/segment -> site
 
 
+class RelationStrength(StrEnum):
+    """How much the dependent needs the thing it depends on.
+
+    HARD: it cannot work without it. A service loses its primary database and stops.
+    SOFT: it degrades but survives. A checkout service whose payment provider is gone
+    queues orders and retries; the cart still works, confirmation is late.
+
+    This lives on the relation, not the entity, because the same database can be
+    load-bearing for one service and a nice-to-have for another.
+    """
+
+    HARD = "hard"
+    SOFT = "soft"
+
+
 class Status(StrEnum):
     UP = "up"
     DEGRADED = "degraded"
@@ -60,5 +75,11 @@ class Relation(BaseModel):
     src: str
     dst: str
     kind: RelationKind
+    strength: RelationStrength = RelationStrength.HARD
+    """Default HARD: assume a dependency is load-bearing until someone says otherwise.
+
+    Guessing SOFT would hide real outages, which is the failure mode that hurts people.
+    Guessing HARD only produces false alarms, which is the failure mode that annoys them.
+    """
     attrs: dict[str, Any] = Field(default_factory=dict)
     provenance: list[Provenance] = Field(default_factory=list)

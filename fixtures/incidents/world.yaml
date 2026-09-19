@@ -175,6 +175,7 @@ relations:
     source: static_yaml
     source_id: fixtures/demo-world.yaml
   src: host-a1
+  strength: hard
 - attrs: {}
   dst: site-a
   kind: HOSTED_IN
@@ -183,6 +184,7 @@ relations:
     source: static_yaml
     source_id: fixtures/demo-world.yaml
   src: host-a2
+  strength: hard
 - attrs: {}
   dst: site-b
   kind: HOSTED_IN
@@ -191,6 +193,7 @@ relations:
     source: static_yaml
     source_id: fixtures/demo-world.yaml
   src: host-b1
+  strength: hard
 - attrs: {}
   dst: host-a1
   kind: RUNS_ON
@@ -199,6 +202,7 @@ relations:
     source: static_yaml
     source_id: fixtures/demo-world.yaml
   src: node-a1
+  strength: hard
 - attrs: {}
   dst: k8s-main
   kind: MEMBER_OF
@@ -207,6 +211,7 @@ relations:
     source: static_yaml
     source_id: fixtures/demo-world.yaml
   src: node-a1
+  strength: hard
 - attrs: {}
   dst: host-a2
   kind: RUNS_ON
@@ -215,6 +220,7 @@ relations:
     source: static_yaml
     source_id: fixtures/demo-world.yaml
   src: node-a2
+  strength: hard
 - attrs: {}
   dst: k8s-main
   kind: MEMBER_OF
@@ -223,6 +229,7 @@ relations:
     source: static_yaml
     source_id: fixtures/demo-world.yaml
   src: node-a2
+  strength: hard
 - attrs: {}
   dst: host-b1
   kind: RUNS_ON
@@ -231,6 +238,7 @@ relations:
     source: static_yaml
     source_id: fixtures/demo-world.yaml
   src: node-b1
+  strength: hard
 - attrs: {}
   dst: k8s-main
   kind: MEMBER_OF
@@ -239,6 +247,7 @@ relations:
     source: static_yaml
     source_id: fixtures/demo-world.yaml
   src: node-b1
+  strength: hard
 - attrs: {}
   dst: node-a1
   kind: RUNS_ON
@@ -247,6 +256,7 @@ relations:
     source: static_yaml
     source_id: fixtures/demo-world.yaml
   src: svc-web
+  strength: hard
 - attrs: {}
   dst: node-b1
   kind: RUNS_ON
@@ -255,6 +265,7 @@ relations:
     source: static_yaml
     source_id: fixtures/demo-world.yaml
   src: svc-web
+  strength: hard
 - attrs: {}
   dst: svc-checkout
   kind: DEPENDS_ON
@@ -263,6 +274,7 @@ relations:
     source: static_yaml
     source_id: fixtures/demo-world.yaml
   src: svc-web
+  strength: soft
 - attrs: {}
   dst: lb-edge
   kind: MEMBER_OF
@@ -271,6 +283,7 @@ relations:
     source: static_yaml
     source_id: fixtures/demo-world.yaml
   src: svc-web
+  strength: hard
 - attrs: {}
   dst: node-a2
   kind: RUNS_ON
@@ -279,6 +292,7 @@ relations:
     source: static_yaml
     source_id: fixtures/demo-world.yaml
   src: svc-checkout
+  strength: hard
 - attrs: {}
   dst: db-orders
   kind: DEPENDS_ON
@@ -287,6 +301,7 @@ relations:
     source: static_yaml
     source_id: fixtures/demo-world.yaml
   src: svc-checkout
+  strength: hard
 - attrs: {}
   dst: svc-inventory
   kind: DEPENDS_ON
@@ -295,6 +310,7 @@ relations:
     source: static_yaml
     source_id: fixtures/demo-world.yaml
   src: svc-checkout
+  strength: hard
 - attrs: {}
   dst: ext-payments
   kind: DEPENDS_ON
@@ -303,6 +319,7 @@ relations:
     source: static_yaml
     source_id: fixtures/demo-world.yaml
   src: svc-checkout
+  strength: soft
 - attrs: {}
   dst: node-a1
   kind: RUNS_ON
@@ -311,6 +328,7 @@ relations:
     source: static_yaml
     source_id: fixtures/demo-world.yaml
   src: svc-inventory
+  strength: hard
 - attrs: {}
   dst: db-stock
   kind: DEPENDS_ON
@@ -319,6 +337,7 @@ relations:
     source: static_yaml
     source_id: fixtures/demo-world.yaml
   src: svc-inventory
+  strength: hard
 - attrs: {}
   dst: host-a2
   kind: RUNS_ON
@@ -327,6 +346,7 @@ relations:
     source: static_yaml
     source_id: fixtures/demo-world.yaml
   src: db-orders
+  strength: hard
 - attrs: {}
   dst: host-a1
   kind: RUNS_ON
@@ -335,3 +355,4 @@ relations:
     source: static_yaml
     source_id: fixtures/demo-world.yaml
   src: db-stock
+  strength: hard
