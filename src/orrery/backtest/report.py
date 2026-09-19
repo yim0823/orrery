@@ -23,6 +23,15 @@ class Report:
     def skipped(self) -> int:
         return sum(c.skipped_unobserved for c in self.comparisons)
 
+    @property
+    def unverified(self) -> int:
+        """Predictions of breakage that no record confirms or denies.
+
+        Precision cannot see these, so without the number an engine that over-predicts
+        looks identical to one that does not.
+        """
+        return sum(len(c.unverified_predictions) for c in self.comparisons)
+
     def total(self, outcome: Outcome) -> int:
         return sum(c.count(outcome) for c in self.comparisons)
 
@@ -52,12 +61,21 @@ class Report:
             return None
         return (self.total(Outcome.HIT) + self.total(Outcome.CORRECT_UP)) / self.scored
 
-    def worst(self, limit: int = 5) -> list[Comparison]:
-        """Incidents with the most misses first. Misses are what get people hurt."""
-        return sorted(
-            self.comparisons, key=lambda c: (-c.count(Outcome.MISS), -c.count(Outcome.FALSE_ALARM))
-        )[:limit]
+    def exact_on_impacted(self) -> float | None:
+        """Exact severity, counted only over what actually broke.
 
+        `exact_rate` includes `correct_up`, so a record listing forty healthy entities
+        lifts the score without the engine getting anything hard right.
+        """
+        broken = (
+            self.total(Outcome.HIT)
+            + self.total(Outcome.UNDERSTATED)
+            + self.total(Outcome.OVERSTATED)
+            + self.total(Outcome.MISS)
+        )
+        if not broken:
+            return None
+        return self.total(Outcome.HIT) / broken
 
 def run(incidents: list[Incident]) -> Report:
     return Report(comparisons=[replay(i) for i in incidents])
@@ -80,10 +98,28 @@ def format_report(report: Report) -> str:
         )
     lines.append("")
 
-    lines.append(f"  recall    {_pct(report.recall())}   of what broke, we predicted broken")
-    lines.append(f"  precision {_pct(report.precision())}   of what we predicted, actually broke")
+    lines.append(
+        f"  recall    {_pct(report.recall())}   of what broke, we called broken at all"
+    )
+    lines.append(
+        f"  precision {_pct(report.precision())}   of the predictions someone checked, right"
+    )
     lines.append(f"  exact     {_pct(report.exact_rate())}   severity exactly right")
+    lines.append(
+        f"  on breaks {_pct(report.exact_on_impacted())}   severity exactly right, "
+        f"counting only what broke"
+    )
     lines.append("")
+    if report.unverified:
+        lines.append(
+            f"  ⚠ {report.unverified} prediction(s) of breakage nobody checked. Precision "
+            f"cannot see them,"
+        )
+        lines.append(
+            "    so it is an upper bound: over-predicting is free until the records "
+            "say otherwise."
+        )
+        lines.append("")
 
     rows = [
         ("hit", Outcome.HIT, "predicted, right severity"),
@@ -117,6 +153,19 @@ def format_report(report: Report) -> str:
 
     if report.scored < 30:
         lines.append(
-            "⚠ fewer than 30 scored predictions. Treat these rates as a smoke test, not a measurement."
+            "⚠ fewer than 30 scored predictions. Treat these rates as a smoke test, "
+            "not a measurement."
         )
+
+    worlds = {c.world for c in report.comparisons if c.world}
+    if len(worlds) == 1 and report.incidents > 1:
+        lines.append(
+            "⚠ every incident replays against one snapshot. If that snapshot was written "
+            "after the"
+        )
+        lines.append(
+            "  incidents, this measures hindsight rather than prediction — an edge learned "
+            "from a"
+        )
+        lines.append("  postmortem is already in the map being graded.")
     return "\n".join(lines)

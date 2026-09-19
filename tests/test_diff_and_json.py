@@ -137,13 +137,10 @@ def test_backtest_json_exposes_every_judgement():
 
 def test_json_output_is_parseable_from_a_pipe():
     # The point of this flag is another program reading it, so check the real thing.
+    # It used to fall back to a different invocation on failure, which meant a broken
+    # module entry point silently swapped the thing under test for one that worked.
     out = subprocess.run(
-        [sys.executable, "-m", "orrery.cli", "blast", "site-a", "--json-out"],
-        capture_output=True, text=True, check=False,
+        [sys.executable, "-m", "orrery", "blast", "site-a", "--json-out"],
+        capture_output=True, text=True, check=True,
     )
-    if out.returncode != 0:  # module entrypoint is optional; the installed script is the contract
-        out = subprocess.run(
-            ["uv", "run", "orrery", "blast", "site-a", "--json-out"],
-            capture_output=True, text=True, check=True,
-        )
     assert json.loads(out.stdout)["root"] == "site-a"

@@ -7,15 +7,18 @@
 [![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue.svg)](pyproject.toml)
 [![Status](https://img.shields.io/badge/status-early--alpha-orange.svg)](#project-status)
 
-**orrery computes what breaks when you touch your infrastructure.**
+**orrery computes what else fails when one thing in your infrastructure does.**
 
-You model your hosts, clusters, services and databases as a graph. orrery answers
-two questions over it: what is in range of a failure, and what actually goes down
-once replicas and failover are taken into account.
+You model your estate as a graph. orrery answers two questions over it: what is in
+range of a failure, and what actually goes down once redundancy and failover are taken
+into account. It models one thing failing, not a change being applied — "reboot this
+host" is expressed as that host going down.
 
-> ⚠️ **Early alpha.** The engine works, is tested, and can grade itself against past
-> incidents — but it has not yet been graded against *yours*. Read
-> [Project status](#project-status) before relying on it.
+> ⚠️ **Early alpha, and one licensing caveat.** The engine works, is tested, and can
+> grade itself against past incidents — but it has not been graded against *yours*, and
+> accuracy is the open question. Separately: the first commits were made on employer
+> equipment, so the author's right to license this is not yet settled in writing. If
+> that matters to you, wait. Both are expanded in [Project status](#project-status).
 
 ---
 
@@ -44,14 +47,15 @@ $ orrery simulate host-a1
   host-a1                  -> down      passthrough
   node-a1                  -> down      passthrough
   db-stock                 -> down      
-  svc-web                  -> degraded  replicas=3
+  svc-web                  -> degraded  lost one of its places to run
   svc-inventory            -> down      hard dep down
   svc-checkout             -> down      hard dep down
 ```
 
 Same host, different answer:
 
-- `svc-web` **degrades** — it still has another node to run on.
+- `svc-web` **degrades** — it still has another node to run on. Not because anything
+  declares a replica count; because the graph has another `RUNS_ON` edge.
 - `svc-inventory` **dies** — the database it needs died with the host.
 - `svc-checkout` **dies with it** — hard dependency on inventory.
 
@@ -88,7 +92,11 @@ services, 2 databases. It resembles no real organization.
 | `orrery diff <a> <b>` | What changed between two snapshots |
 | `orrery backtest <dir>` | Replay past incidents and score the engine against them |
 
-### Two questions you have on day one
+## Two questions you have on day one
+
+Before any incident history exists, before anyone has calibrated anything, and before you
+have modelled a single dependency by hand. These two run on whatever the first connector
+gave you.
 
 Before any incident history exists, and before anyone has calibrated anything:
 
@@ -103,13 +111,13 @@ single points of failure, by what goes with them (18 entities)
     4. host-a1        5 (29.4%)  host
 ```
 
-Structural reach, and deliberately blind to `replicas` — redundancy that is recorded but
-not real is exactly what this list exists to surface.
+Structural reach, and deliberately blind to any declared redundancy — redundancy that is
+recorded but not real is exactly what this list exists to surface.
 
 ```console
 $ orrery check
 
-map: 18 entities, 24 relations
+map: 18 entities, 25 relations
   sources: static_yaml (18)
   0 entities confirmed by more than one source, 18 by exactly one
 
@@ -133,16 +141,31 @@ A world is **entities** and **relations**, nothing else.
 ```yaml
 entities:
   - {id: host-a1,      kind: host,     name: "a1"}
-  - {id: svc-checkout, kind: service,  name: "checkout", attrs: {replicas: 2}}
-  - {id: db-orders,    kind: database, name: "orders",   attrs: {replica: true}}
+  - {id: node-a1,      kind: node,     name: "node-a1"}
+  - {id: svc-checkout, kind: service,  name: "checkout"}
+  - {id: db-orders,    kind: database, name: "orders"}
 
 relations:
+  - {src: node-a1,      dst: host-a1,   kind: RUNS_ON}
+  - {src: svc-checkout, dst: node-a1,   kind: RUNS_ON}
+  - {src: db-orders,    dst: host-a1,   kind: RUNS_ON}
   - {src: svc-checkout, dst: db-orders, kind: DEPENDS_ON}
-  - {src: svc-checkout, dst: node-a2,   kind: RUNS_ON}
 ```
+
+Every id in `relations` must already exist in `entities`; ingest refuses a dangling
+reference rather than inventing the missing end.
+
+Note what is *not* here: no `replicas`, no `replica: true`. **Redundancy is somewhere to
+run, not a number you assert.** A service with three `RUNS_ON` edges survives losing one;
+a service with `replicas: 3` and one `RUNS_ON` edge does not, and `orrery check` will tell
+you which one you have built.
 
 Five relation kinds. The arrow always points **from the dependent to the depended-upon**
 — reverse one and the blast radius is silently wrong.
+
+There are sixteen entity kinds (`orrery ingest` will list them if you mistype one); the
+ones in the demo are `site`, `host`, `cluster`, `node`, `service`, `database`,
+`load_balancer` and `external`. Each kind earns its place by failing differently.
 
 | Kind | Reads as |
 |---|---|
@@ -245,18 +268,23 @@ someone acts on that answer at 3am.
 
 ## Project status
 
-Early alpha, `0.1.0`. Honest picture:
+Early alpha, `0.2.0`. Honest picture:
+
+**Licensing.** The first two commits were authored on employer equipment under an
+employer account. Code is copyright rather than patent, and work-for-hire rules are
+stricter than most people expect, so the author's right to grant this licence is not
+settled in writing yet. Nothing here is company-specific and a commit hook enforces that,
+but if you need a clean provenance chain, this is not yet it.
 
 | Works | Not yet |
 |---|---|
-| Entity/relation model, YAML ingest | Connectors to real systems (you write them) |
-| Structural blast radius | Visualization — terminal output only |
-| Behavioral propagation with per-kind models | Snapshot diffing over time |
-| Entity-resolution candidates | Capacity — see below |
-| Four-axis agent trust rubric | Materializing part of the world as real running systems |
-| Backtesting harness | Time that advances on its own, and more than one actor |
-| Hard and soft dependencies, quorum, tolerance windows | |
-| Snapshot diffing, JSON output, Neo4j source, scenario runner | |
+| Entity/relation model, YAML ingest, snapshot diffing | Connectors to real systems — Kubernetes is the only one |
+| Structural blast radius and behavioral propagation | Capacity: whether the survivors can carry the load |
+| Hard and soft dependencies, tolerance windows, quorum | Magnitude: two of three replicas lost reads as one |
+| Entity-resolution candidates | Visualization — terminal and JSON only |
+| Machine-readable output, Neo4j source | Time that advances on its own, and more than one actor |
+| Map audit (`check`) and risk ranking (`spof`) | Materializing part of the world as real running systems |
+| Backtesting harness | |
 
 **Accuracy is the open problem, and there is now a way to measure it.**
 
@@ -266,9 +294,13 @@ $ orrery backtest fixtures/incidents
 backtest: 6 incident(s), 24 prediction(s) scored
   78 entit(ies) skipped — the records say nothing about them
 
-  recall    100%   of what broke, we predicted broken
-  precision 100%   of what we predicted, actually broke
+  recall    100%   of what broke, we called broken at all
+  precision 100%   of the predictions someone checked, right
   exact     96%   severity exactly right
+  on breaks 95%   severity exactly right, counting only what broke
+
+  ⚠ 5 prediction(s) of breakage nobody checked. Precision cannot see them,
+    so it is an upper bound: over-predicting is free until the records say otherwise.
 
   hit            19   predicted, right severity
   correct up      4   agreed it was unaffected
@@ -278,6 +310,9 @@ backtest: 6 incident(s), 24 prediction(s) scored
   MISS            0   said fine, was broken
 
 ⚠ fewer than 30 scored predictions. Treat these rates as a smoke test, not a measurement.
+⚠ every incident replays against one snapshot. If that snapshot was written after the
+  incidents, this measures hindsight rather than prediction — an edge learned from a
+  postmortem is already in the map being graded.
 ```
 
 Write your past incidents as records — what broke, and what was *observed* to break —
@@ -289,11 +324,18 @@ and the engine grades itself. Two design choices matter:
 - **Severity counts.** Predicting "down" when something merely degraded is not a hit. It
   is `overstated`, and it is why the demo scores 100% recall but 75% exact.
 
-The harness earned its keep immediately. Its first run found four defects, and they were
-not small ones: arrival order could decide whether a service came out degraded or down,
-clusters ignored quorum entirely, services trusted a `replicas` attribute instead of
-counting the nodes that were actually left, and there was no notion of a soft dependency
-at all. All four are fixed, and each has a fixture keeping it fixed.
+The harness has earned its keep twice. Its first run found four defects — arrival order
+deciding whether a service came out degraded or down, quorum ignored entirely, no notion
+of a soft dependency, and a service that trusted a `replicas` attribute instead of
+counting the nodes actually left. An adversarial review then found that the last one was
+only half fixed: propagation counted survivors and the behavior model then overrode the
+count with the attribute anyway, so a service on forty-nine healthy nodes was reported
+down when one rebooted. That review also found that a network segment failing computed as
+affecting nothing, because the edge that attaches a host to it was excluded from impact.
+
+Read that as the argument for the harness rather than against the engine: both classes of
+defect were invisible to 140 passing tests, and the second was invisible to the harness
+too until someone went looking for it deliberately.
 
 The one `understated` result left is deliberate, in `fixtures/incidents/INC-0006.yaml`:
 **the engine knows whether somewhere is left to run, not whether the survivors can carry
@@ -302,6 +344,14 @@ reality the remaining node took the whole load and fell over. Answering that nee
 capacity modelling, which may not belong in a structural engine at all.
 
 A backtest containing only incidents the engine already handles measures nothing.
+
+**Read the report's own warnings.** Precision is computed over predictions somebody
+actually checked, so it is an upper bound: the report prints how many predictions nobody
+verified, and until that number is small, over-predicting is free. Recall counts a
+prediction of "degraded" for something that died as caught, which is why `on breaks` —
+severity exactly right, counting only what broke — is the number to watch. And if every
+incident replays against one snapshot written after the fact, the exercise measures
+hindsight rather than prediction; the report says that too.
 
 Until you have run this against your own incidents, treat the output as advisory and say
 so to anyone who asks.

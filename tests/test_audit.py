@@ -43,9 +43,11 @@ def _for(world: World, entity_id: str) -> set[str]:
 
 
 def test_it_counts_what_it_looked_at():
+    # Asserting against a second copy of the same call proves nothing, so the numbers are
+    # pinned to the fixture. They change when the demo world does, which is the point.
     a = audit(_demo())
-    assert a.entities == len(_demo())
-    assert a.relations == len(_demo().relations())
+    assert a.entities == 18
+    assert a.relations == 25
 
 
 def test_an_isolated_entity_is_flagged():
@@ -148,9 +150,11 @@ def test_a_clean_map_says_so():
 
 
 def test_the_worst_thing_is_ranked_first():
-    risks = single_points_of_failure(_demo(), limit=3)
+    # `a > b or a == b` is always true after sorting by -reach. Assert the order itself.
+    risks = single_points_of_failure(_demo(), limit=5)
     assert risks[0].entity_id == "site-a"
-    assert risks[0].reach > risks[1].reach or risks[0].reach == risks[1].reach
+    assert [r.reach for r in risks] == sorted((r.reach for r in risks), reverse=True)
+    assert risks[0].reach > risks[-1].reach
 
 
 def test_reach_is_reported_as_a_share_of_the_estate():

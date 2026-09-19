@@ -454,10 +454,18 @@ to hard changes every answer downstream of it.
 
 `src/orrery/cli.py`
 
-Six commands: `ingest`, `blast`, `simulate`, `resolve`, `diff`, `backtest`. **Every one of
-them takes `--json-out`**, because the interesting uses are not a person typing. Posting a
-blast radius onto a change ticket, or failing a pipeline on a miss count, means something
-has to parse the output.
+Eight commands: `ingest`, `blast`, `simulate`, `check`, `spof`, `resolve`, `diff`,
+`backtest`. **Every one of them takes `--json-out`**, because the interesting uses are not
+a person typing. Posting a blast radius onto a change ticket, or failing a pipeline on a
+miss count, means something has to parse the output.
+
+`check` and `spof` are the two that work on the day the first connector runs, before
+anything has been modelled by hand or calibrated against anything. `check` looks for the
+shapes that mean the map is wrong rather than the estate — entities nothing connects to,
+services with nowhere recorded to run, redundancy that exists on paper but not in the
+graph. `spof` ranks entities by how much goes with them, as a bitset DP over the graph's
+condensation rather than a traversal per entity: that difference is 228 seconds versus a
+third of a second on twenty-five thousand entities, which decides whether anyone runs it.
 
 Every JSON payload carries a schema version:
 

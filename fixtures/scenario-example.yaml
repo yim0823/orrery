@@ -2,7 +2,7 @@ id: GEN-0001
 title: "Night deploy: memory leak, HPA scales on CPU, memory alert missing"
 world: fixtures/demo-world.yaml
 injections:
-  - {entity_id: svc-checkout, event: memory_leak, at: 0}
+  - {entity_id: svc-checkout, event: degraded, at: 0}   # the leak's effect, which is what the engine models
 observation:
   alerts: missing
   notes: ['deploy channel only says "deploy complete"']

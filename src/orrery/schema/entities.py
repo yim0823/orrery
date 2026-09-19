@@ -12,6 +12,16 @@ from pydantic import BaseModel, Field
 
 
 class EntityKind(StrEnum):
+    """What something is, to the degree the engine cares.
+
+    The list is short on purpose, and each kind earns its place by failing differently
+    from the others. A kind that behaves exactly like `service` is noise: it makes the
+    model look richer while changing no answer. When something here does not fit, the
+    honest move is usually the closest kind plus an `attrs` entry, not a new kind — the
+    exception is anything whose failure semantics a behavior model would need to special
+    case, and those are the ones below.
+    """
+
     SITE = "site"  # an IDC, a cloud region, an availability zone
     RACK = "rack"
     HOST = "host"  # physical server or VM
@@ -19,7 +29,13 @@ class EntityKind(StrEnum):
     NODE = "node"  # a cluster member
     SERVICE = "service"  # a deployable workload
     DATABASE = "database"
+    QUEUE = "queue"  # broker or stream: producers survive it, consumers usually do not
+    STORAGE = "storage"  # volume, SAN, object store: many things run on one of these
     LOAD_BALANCER = "load_balancer"
+    DNS = "dns"  # a zone or resolver — close to a universal dependency
+    CERTIFICATE = "certificate"  # expires on a date rather than failing at random
+    CDN = "cdn"
+    JOB = "job"  # batch or scheduled work, as opposed to something always running
     NETWORK_SEGMENT = "network_segment"  # VLAN, subnet, VPC
     EXTERNAL = "external"  # third-party dependency we do not model internally
 

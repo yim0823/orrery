@@ -22,6 +22,9 @@ class World:
         self._overlay: dict[str, Entity] | None = None
         """Set on a fork. Holds private copies of the entities this world has written to;
         everything else is read straight from the shared graph."""
+        self.collisions: list[tuple[str, str, str]] = []
+        """(id, name kept, name discarded) for every id that arrived twice under two
+        different names. Usually an id scheme that is not as unique as it looked."""
 
     # ---- building ----
     def _detach(self) -> None:
@@ -29,20 +32,40 @@ class World:
 
         Forks are read-mostly by design, but adding an entity or a relation changes the
         graph itself rather than one entity's state, so the shared structure has to
-        become ours first. Silently writing through to the parent would be a bug that
-        only shows up in whatever ran next.
+        become ours first.
+
+        `MultiDiGraph.copy()` is shallow: the node attribute dicts are new, the `Entity`
+        objects inside them are not. Leaving it there is the whole bug this docstring
+        used to warn about and cause at the same time — merging into an entity on a fork
+        reached through and edited the parent's object, and it surfaced in whatever ran
+        next rather than here. So every entity is copied on detach.
         """
         if self._overlay is None:
             return
         self.g = self.g.copy()
-        for eid, ent in self._overlay.items():
-            self.g.nodes[eid]["entity"] = ent
+        for node, data in self.g.nodes(data=True):
+            e: Entity = self._overlay.get(node) or data["entity"]
+            data["entity"] = e.model_copy(update={"attrs": dict(e.attrs)})
         self._overlay = None
 
     def add_entity(self, e: Entity) -> None:
+        """Add, or merge into what is already there.
+
+        Merging is the point when two sources describe the same thing — that is how an
+        entity ends up cross-confirmed. It is a collision when one source describes two
+        different things under one id, and the two are indistinguishable from here, so
+        the merge is recorded rather than announced. `collisions` is what `ingest`
+        reports and what `check` reads.
+        """
         self._detach()
         if e.id in self.g:
             existing: Entity = self.g.nodes[e.id]["entity"]
+            if existing.kind != e.kind:
+                self.collisions.append(
+                    (e.id, f"kind {existing.kind.value}", f"kind {e.kind.value}")
+                )
+            if existing.name != e.name:
+                self.collisions.append((e.id, existing.name, e.name))
             existing.provenance.extend(e.provenance)
             existing.attrs.update(e.attrs)
         else:
@@ -90,6 +113,17 @@ class World:
     def in_edges(self, entity_id: str, kind: RelationKind) -> list[str]:
         return [u for u, _, k in self.g.in_edges(entity_id, keys=True) if k == kind.value]
 
+    def dependents(self, entity_id: str, kinds: tuple[RelationKind, ...]) -> set[str]:
+        """Everything pointing at this entity over any of `kinds`, in one pass.
+
+        Asking per-kind means re-walking the node's incoming edges once per kind, which
+        is five scans for the five that carry consequence. Reach ranking calls this for
+        every entity in the estate, so the difference is the difference between a command
+        you run and one you schedule.
+        """
+        wanted = {k.value for k in kinds}
+        return {u for u, _, k in self.g.in_edges(entity_id, keys=True) if k in wanted}
+
     def in_relations(self, entity_id: str, kind: RelationKind) -> list[Relation]:
         """Incoming edges as relations, so callers can read strength and attrs."""
         return [
@@ -120,14 +154,35 @@ class World:
         """
         w = World()
         if deep:
-            w.g = copy.deepcopy(self.g)
+            # Flatten first: a deep copy of the shared graph would otherwise return the
+            # parent's state and drop everything this world has done to itself.
+            flat = self.g if self._overlay is None else self._flattened()
+            w.g = copy.deepcopy(flat)
             return w
         # Share the structure and keep private copies only of what gets written to. A
         # simulation touches a fraction of the estate, so copying all of it — or even
         # just the graph — is work thrown away on every call.
         w.g = self.g
-        w._overlay = {}
+        # Inherit what this world has already changed. Forking a fork used to hand back
+        # a pristine estate, which is worse than an error: `run_scenario` and `replay`
+        # both fork whatever they are given, so a world that had already failed would
+        # quietly come back healthy.
+        w._overlay = (
+            {}
+            if self._overlay is None
+            else {
+                k: v.model_copy(update={"attrs": dict(v.attrs)})
+                for k, v in self._overlay.items()
+            }
+        )
         return w
+
+    def _flattened(self) -> nx.MultiDiGraph:
+        """This world's graph with the overlay written into it, as a new graph."""
+        g = self.g.copy()
+        for eid, ent in (self._overlay or {}).items():
+            g.nodes[eid]["entity"] = ent
+        return g
 
     def _own(self, entity_id: str) -> Entity:
         """Take private ownership of one entity before writing to it."""
@@ -158,6 +213,9 @@ class World:
         for r in data["relations"]:
             w.add_relation(Relation(**r))
         return w
+
+    def __contains__(self, entity_id: object) -> bool:
+        return entity_id in self.g
 
     def __len__(self) -> int:
         return self.g.number_of_nodes()

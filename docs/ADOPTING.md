@@ -268,8 +268,15 @@ Read `MISS` first and everything else second. A miss — predicting healthy for 
 that broke — is the failure that hurts people. A false alarm is the failure that gets the
 tool ignored. Both matter; they are not the same kind of wrong.
 
-Ten incidents is a smoke test. Thirty starts to be a measurement, and the report says so
-itself below that line.
+Ten incidents is a smoke test. The report's own threshold is thirty *predictions*, not
+thirty incidents — a handful of well-documented outages can clear it, and a pile of
+one-line records will not.
+
+Read the report's warnings as carefully as its numbers. Precision only sees predictions
+somebody checked, so it prints how many went unverified and says it is an upper bound.
+Recall counts a prediction of "degraded" for something that died as caught, which is why
+`on breaks` is the number to watch. And if every incident replays against one snapshot
+written after the fact, you are measuring hindsight.
 
 **This is also your only credible artifact.** "We built a dependency graph" persuades
 nobody who has watched a CMDB rot. "We replayed our last thirty incidents and the map

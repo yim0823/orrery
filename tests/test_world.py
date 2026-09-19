@@ -14,7 +14,7 @@ def _world(resolver=None):
 def test_ingest_counts():
     w = _world()
     assert len(w) == 18
-    assert len(w.relations()) == 24
+    assert len(w.relations()) == 25
 
 
 def test_blast_radius_site_kills_everything_hosted_there():

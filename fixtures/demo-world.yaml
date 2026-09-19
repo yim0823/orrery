@@ -13,8 +13,8 @@ entities:
   - {id: svc-checkout, kind: service, name: "checkout", attrs: {replicas: 2}}
   - {id: svc-inventory, kind: service, name: "inventory", attrs: {replicas: 1}}
   - {id: svc-inventory-prod, kind: service, name: "inventory-prod", attrs: {replicas: 1}}  # same thing, other system's name
-  - {id: db-orders, kind: database, name: "orders", attrs: {engine: postgres, replica: true}}
-  - {id: db-stock, kind: database, name: "stock", attrs: {engine: mysql, replica: false}}
+  - {id: db-orders, kind: database, name: "orders", attrs: {engine: postgres}}       # primary + replica, placed below
+  - {id: db-stock, kind: database, name: "stock", attrs: {engine: mysql}}            # single instance
   - {id: lb-edge, kind: load_balancer, name: "edge"}
   - {id: ext-payments, kind: external, name: "payments provider"}
   - {id: etcd, kind: cluster, name: "etcd (quorum 2 of 3)", attrs: {quorum: 2, members: 3}}
@@ -32,7 +32,10 @@ relations:
   - {src: svc-web, dst: node-b1, kind: RUNS_ON}
   - {src: svc-checkout, dst: node-a2, kind: RUNS_ON}
   - {src: svc-inventory, dst: node-a1, kind: RUNS_ON}
+  # orders has a replica, and the graph says where it is — an attribute claiming one
+  # exists is what `orrery check` flags as redundancy on paper only
   - {src: db-orders, dst: host-a2, kind: RUNS_ON}
+  - {src: db-orders, dst: host-b1, kind: RUNS_ON}
   - {src: db-stock, dst: host-a1, kind: RUNS_ON}
   # the storefront still serves pages when checkout is broken; you just cannot buy
   - {src: svc-web, dst: svc-checkout, kind: DEPENDS_ON, strength: soft}

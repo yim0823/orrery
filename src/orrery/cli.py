@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import difflib
+import functools
 import json
 import pathlib
 import sys
@@ -25,6 +27,14 @@ app = typer.Typer(
 )
 _STATE = pathlib.Path(".orrery/world.yaml")
 
+KNOWN_EVENTS = frozenset({"down", "degraded"})
+"""Events a person can inject from the command line.
+
+The rest — `dependency_down`, `place_lost` and friends — are produced by propagation and
+are not things that happen to an entity from outside. Accepting an arbitrary string here
+meant a typo printed a clean, empty, confident result.
+"""
+
 SCHEMA_VERSION = 1
 """Bumped when the shape of --json output changes incompatibly.
 
@@ -40,12 +50,45 @@ def _load(path: pathlib.Path | None = None) -> World:
     return World.load(p)
 
 
+def _resolve(world: World, entity_id: str) -> str:
+    """Fail on an unknown id with the ids it might have been.
+
+    Mistyping an id at 3am is the most likely thing anyone does with this tool, and a
+    forty-line traceback for a typo teaches people the tool is fragile.
+    """
+    if entity_id in world.g:
+        return entity_id
+    near = difflib.get_close_matches(entity_id, list(world.g), n=5, cutoff=0.4)
+    hint = f" Did you mean: {', '.join(near)}?" if near else ""
+    raise typer.BadParameter(f"no entity {entity_id!r} in this world.{hint}")
+
+
+def friendly(fn):
+    """Turn the errors a user can actually cause into a sentence.
+
+    Anything not listed here is a bug in orrery, and a traceback is the right output for
+    those — it is what someone would paste into an issue.
+    """
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except FileNotFoundError as exc:
+            raise typer.BadParameter(f"no such file: {exc.filename}") from exc
+        except ValueError as exc:
+            raise typer.BadParameter(str(exc)) from exc
+
+    return wrapper
+
+
 def _emit(payload: dict) -> None:
     json.dump({"schema": SCHEMA_VERSION, **payload}, sys.stdout, ensure_ascii=False, indent=2)
     sys.stdout.write("\n")
 
 
 @app.command()
+@friendly
 def ingest(fixture: pathlib.Path, out: pathlib.Path = _STATE, json_out: bool = False):
     """Ingest a YAML fixture into the world and persist it."""
     w = World()
@@ -53,12 +96,31 @@ def ingest(fixture: pathlib.Path, out: pathlib.Path = _STATE, json_out: bool = F
     out.parent.mkdir(parents=True, exist_ok=True)
     w.save(out)
     if json_out:
-        _emit({"entities": len(w), "relations": len(w.relations()), "out": str(out)})
+        _emit(
+            {
+                "entities": len(w),
+                "relations": len(w.relations()),
+                "out": str(out),
+                "collisions": [
+                    {"id": i, "kept": kept, "discarded": lost} for i, kept, lost in w.collisions
+                ],
+            }
+        )
         return
     typer.echo(f"ingested {len(w)} entities, {len(w.relations())} relations -> {out}")
+    if w.collisions:
+        typer.echo(
+            f"  ⚠ {len(w.collisions)} id(s) arrived twice under different names and were "
+            f"merged:"
+        )
+        for eid, kept, lost in w.collisions[:10]:
+            typer.echo(f"    {eid}: kept {kept!r}, discarded {lost!r}")
+        if len(w.collisions) > 10:
+            typer.echo(f"    ... and {len(w.collisions) - 10} more")
 
 
 @app.command()
+@friendly
 def blast(
     entity_id: str,
     max_hops: int | None = None,
@@ -67,6 +129,7 @@ def blast(
 ):
     """If this entity goes down, what is in range? Structural blast radius."""
     w = _load(world)
+    entity_id = _resolve(w, entity_id)
     br = blast_radius(w, entity_id, max_hops)
     if json_out:
         _emit(
@@ -93,6 +156,7 @@ def blast(
 
 
 @app.command()
+@friendly
 def simulate(
     entity_id: str,
     event: str = "down",
@@ -109,6 +173,13 @@ def simulate(
     declared tolerance turn hard once it is exceeded.
     """
     w = _load(world).fork()
+    entity_id = _resolve(w, entity_id)
+    if event not in KNOWN_EVENTS:
+        raise typer.BadParameter(
+            f"unknown event {event!r}. Known: {', '.join(sorted(KNOWN_EVENTS))}. "
+            f"An unrecognised event propagates nothing, which looks identical to "
+            f"nothing being affected."
+        )
     effects = propagate(w, Event(entity_id, event), elapsed_s=elapsed_s)
     if json_out:
         _emit(
@@ -134,6 +205,7 @@ def simulate(
 
 
 @app.command()
+@friendly
 def resolve(fixture: pathlib.Path, json_out: bool = False):
     """Propose entity-resolution candidates for a fixture. Never merges."""
     d = StaticYamlConnector(fixture).discover()
@@ -153,6 +225,7 @@ def resolve(fixture: pathlib.Path, json_out: bool = False):
 
 
 @app.command(name="diff")
+@friendly
 def diff_cmd(before: pathlib.Path, after: pathlib.Path, json_out: bool = False):
     """What changed between two world snapshots?
 
@@ -167,6 +240,7 @@ def diff_cmd(before: pathlib.Path, after: pathlib.Path, json_out: bool = False):
 
 
 @app.command()
+@friendly
 def check(world: pathlib.Path | None = None, json_out: bool = False):
     """Is this map any good?
 
@@ -182,6 +256,7 @@ def check(world: pathlib.Path | None = None, json_out: bool = False):
 
 
 @app.command()
+@friendly
 def spof(
     limit: int = 20,
     kind: str | None = None,
@@ -194,6 +269,10 @@ def spof(
     redundancy that is recorded but not real is exactly what this is for finding.
     """
     w = _load(world)
+    if kind and kind not in {k.value for k in EntityKind}:
+        raise typer.BadParameter(
+            f"unknown kind {kind!r}. Known: {', '.join(k.value for k in EntityKind)}"
+        )
     kinds = (EntityKind(kind),) if kind else None
     risks = single_points_of_failure(w, limit=limit, kinds=kinds)
     if json_out:
@@ -203,6 +282,7 @@ def spof(
 
 
 @app.command()
+@friendly
 def backtest(path: pathlib.Path, verbose: bool = False, json_out: bool = False):
     """Replay past incidents and score the engine against what actually happened."""
     incidents = Incident.load_dir(path)

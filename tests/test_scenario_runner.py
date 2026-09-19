@@ -252,12 +252,20 @@ def test_a_scoring_rule_cannot_push_an_axis_out_of_range():
 
 
 def test_a_rule_naming_an_unknown_axis_is_ignored_rather_than_crashing():
+    # `total <= 12` is true of every score ever produced. Compare against the same run
+    # without the rule instead.
+    def agent():
+        return Agent(
+            [("metrics", "read_series"), ("kubectl", "rollback")], root_cause="db-stock"
+        )
+
+    plain = _run(agent())
     sc = _scenario(scoring_rules=[
         ScoringRule(when="read_series", axis="vibes", delta=3, reason="not an axis")
     ])
-    result = _run(Agent([("metrics", "read_series"), ("kubectl", "rollback")],
-                        root_cause="db-stock"), scenario=sc)
-    assert result.score.total <= 12
+    weird = _run(agent(), scenario=sc)
+    assert weird.score.total == plain.score.total
+    assert weird.applied_rules == []
 
 
 # ---- output ----

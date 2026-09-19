@@ -119,9 +119,12 @@ class Neo4jSource:
         query = (
             "MATCH (n) WHERE any(l IN labels(n) WHERE l IN $labels) "
             "RETURN labels(n) AS labels, properties(n) AS props "
-            "SKIP $skip LIMIT $limit"
+            # SKIP/LIMIT across separate queries is only stable under an explicit order.
+            # Without one, a concurrent write or a changed plan silently duplicates or
+            # drops rows, and the result is a map with holes nobody can account for.
+            "ORDER BY n[$idp] SKIP $skip LIMIT $limit"
         )
-        for row in self._paged(session, query, labels=wanted):
+        for row in self._paged(session, query, labels=wanted, idp=self.labels.id_property):
             props = dict(row["props"])
             eid = props.get(self.labels.id_property)
             kind = self.labels.kind_for(row["labels"])
@@ -148,7 +151,7 @@ class Neo4jSource:
             "MATCH (a)-[r]->(b) WHERE type(r) IN $types "
             "AND a[$idp] IS NOT NULL AND b[$idp] IS NOT NULL "
             "RETURN a[$idp] AS src, b[$idp] AS dst, type(r) AS type, properties(r) AS props "
-            "SKIP $skip LIMIT $limit"
+            "ORDER BY src, dst, type SKIP $skip LIMIT $limit"
         )
         for row in self._paged(session, query, types=wanted, idp=self.labels.id_property):
             kind = self.labels.relation_types.get(row["type"])

@@ -10,12 +10,21 @@ def _world():
     return w
 
 
-def test_db_with_replica_degrades_not_dies():
+def test_telling_it_a_database_is_down_means_down():
+    # It used to answer "degraded" here, because an attribute claimed a replica existed.
+    # You say the database is down; the only honest answer is down.
     w = _world()
     propagate(w, Event("db-orders", "down"))
-    assert w.entity("db-orders").status == Status.DEGRADED
-    assert w.entity("svc-checkout").status == Status.DEGRADED  # replicas 2
-    assert w.entity("svc-web").status == Status.DEGRADED
+    assert w.entity("db-orders").status == Status.DOWN
+
+
+def test_losing_one_of_a_databases_two_hosts_is_a_failover():
+    # host-b1 carries the orders replica and nothing else that checkout needs, so this
+    # isolates the failover from the "lost my only node" case that host-a2 would mix in.
+    w = _world()
+    propagate(w, Event("host-b1", "down"))
+    assert w.entity("db-orders").status == Status.DEGRADED  # still running on host-a2
+    assert w.entity("svc-checkout").status == Status.DEGRADED  # reads-only database
 
 
 def test_db_without_replica_kills_single_replica_service():

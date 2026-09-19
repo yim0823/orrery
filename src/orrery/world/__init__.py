@@ -10,7 +10,7 @@ from .audit import (
 )
 from .diff import EntityChange, WorldDiff, diff
 from .graph import World
-from .query import blast_radius
+from .query import blast_radius, reach
 
 __all__ = [
     "EntityChange",
@@ -24,5 +24,6 @@ __all__ = [
     "blast_radius",
     "diff",
     "format_risks",
+    "reach",
     "single_points_of_failure",
 ]

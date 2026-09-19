@@ -1,23 +1,30 @@
 """Queries that make the graph a world. The first one: blast radius.
 
-"If this goes down, what dies?" — computed structurally over RUNS_ON / HOSTED_IN / MEMBER_OF /
-DEPENDS_ON edges. This is the Phase-1 deliverable: a correct answer across a whole company.
+"If this goes down, what is in range?" — computed structurally over the edges that carry
+consequence. Which edges those are is defined once, in `orrery.sim.propagate`, and imported
+here. Two lists drifted apart once already: a network segment failure was visible to
+`simulate` and invisible to `blast`, which is the kind of disagreement that makes people
+stop believing both answers.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from orrery.schema import RelationKind
-
 from .graph import World
 
-# If X is down, everything that has one of these edges *pointing at X* is impacted.
-_IMPACT_EDGES = (
-    RelationKind.RUNS_ON,  # service RUNS_ON node -> node down kills service
-    RelationKind.HOSTED_IN,  # host HOSTED_IN site -> site down kills host
-    RelationKind.MEMBER_OF,  # node MEMBER_OF cluster -> cluster down kills node
-    RelationKind.DEPENDS_ON,  # service DEPENDS_ON db -> db down degrades service
-)
+
+# If X is down, everything that has one of these edges *pointing at X* is in range.
+#
+#   service RUNS_ON node        -> node down reaches the service
+#   host HOSTED_IN site         -> site down reaches the host
+#   node MEMBER_OF cluster      -> cluster down reaches the node
+#   service DEPENDS_ON database -> database down reaches the service
+#   host CONNECTS_TO segment    -> segment down reaches the host
+def _impact_edges():
+    # imported lazily: propagate imports World, and World's package imports this module
+    from orrery.sim.propagate import _DEPENDENT_EDGES
+
+    return _DEPENDENT_EDGES
 
 
 @dataclass
@@ -33,6 +40,29 @@ class BlastRadius:
         return out
 
 
+def reach(world: World, root: str) -> set[str]:
+    """Everything in range of `root` failing, without recording how it got there.
+
+    `blast_radius` keeps a path per impacted entity, which is what makes its answer
+    arguable instead of oracular — and also what makes it too expensive to call once per
+    entity in a large estate. Ranking wants only the size, so it gets only the set.
+    """
+    if root not in world.g:
+        raise KeyError(root)
+    kinds = _impact_edges()
+    seen: set[str] = set()
+    frontier = [root]
+    while frontier:
+        nxt: list[str] = []
+        for cur in frontier:
+            for dep in world.dependents(cur, kinds):
+                if dep != root and dep not in seen:
+                    seen.add(dep)
+                    nxt.append(dep)
+        frontier = nxt
+    return seen
+
+
 def blast_radius(world: World, root: str, max_hops: int | None = None) -> BlastRadius:
     if root not in world.g:
         raise KeyError(root)
@@ -44,7 +74,7 @@ def blast_radius(world: World, root: str, max_hops: int | None = None) -> BlastR
         hop += 1
         nxt: list[str] = []
         for cur in frontier:
-            for kind in _IMPACT_EDGES:
+            for kind in _impact_edges():
                 for dependent in world.in_edges(cur, kind):
                     if dependent == root or dependent in br.impacted:
                         continue

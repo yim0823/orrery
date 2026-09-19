@@ -23,13 +23,11 @@ from typing import Any
 from orrery.harness import Audit, ToolSurface
 from orrery.schema import Status
 from orrery.scoring import Score, Trace, recommend, score_trace
-from orrery.scoring.rubric import Action
+from orrery.scoring.rubric import Action, is_read
 from orrery.sim import Event, propagate
 from orrery.world import World
 
 from .schema import Scenario
-
-_READ_PREFIXES = ("read_", "get_", "list_", "describe_", "query_", "search_")
 
 
 @dataclass
@@ -153,11 +151,7 @@ class Session:
 
         Only meaningful for actions that change something. A read is its own evidence.
         """
-        return any(a.name.startswith(_READ_PREFIXES) for a in self.actions)
-
-
-def _is_read(action_name: str) -> bool:
-    return action_name.startswith(_READ_PREFIXES)
+        return any(is_read(a.name) for a in self.actions)
 
 
 def run_scenario(
@@ -261,7 +255,7 @@ def _safe_action_taken(session: Session, scenario: Scenario) -> bool:
     want = scenario.answer.safe_action.strip().lower()
     if not want:
         return False
-    return any(want in a.name.lower() for a in session.actions if not _is_read(a.name))
+    return any(want in a.name.lower() for a in session.actions if not is_read(a.name))
 
 
 def _apply_rules(scenario: Scenario, session: Session, score: Score) -> list[str]:

@@ -1,19 +1,47 @@
 #!/bin/sh
-# 사내 식별자가 엔진 리포에 들어가는 것을 막는다.
-# denylist는 리포 바깥에 산다. 없으면 통과가 아니라 차단한다(fail closed).
-DENYLIST="${ORRERY_DENYLIST:-$HOME/감사할따름/orrery-사내자료/denylist.txt}"
+# Keep organization-specific identifiers out of this repository.
+#
+# The denylist lives OUTSIDE the repo, because the list itself is the sensitive part.
+# If it cannot be found the commit is refused rather than allowed: a guard that silently
+# disables itself on a new machine is worse than no guard, because you stop checking by
+# hand once you believe something else is watching.
+#
+# Contributing from outside the original organization? You have nothing to hide, so an
+# empty file is the correct denylist:
+#
+#     touch ~/.orrery-denylist
+#     export ORRERY_DENYLIST=~/.orrery-denylist
+#
+# or set it once, permanently:
+#
+#     git config hooks.denylist ~/.orrery-denylist
+set -eu
+
+DENYLIST="${ORRERY_DENYLIST:-$(git config --get hooks.denylist || true)}"
+if [ -z "${DENYLIST}" ]; then
+  DENYLIST="$HOME/.orrery-denylist"
+fi
 
 if [ ! -f "$DENYLIST" ]; then
-  echo "🔴 커밋 차단: denylist를 찾을 수 없습니다 → $DENYLIST"
-  echo "   이 검사 없이는 커밋하지 않습니다. 경로를 확인하거나 ORRERY_DENYLIST로 지정하세요."
+  echo "🔴 commit refused: no denylist found at $DENYLIST"
+  echo
+  echo "   This repository must not contain organization-specific identifiers, and the"
+  echo "   check that enforces that needs a list. It refuses to run without one rather"
+  echo "   than passing, so that it cannot quietly stop working."
+  echo
+  echo "   If you have nothing to exclude, an empty file is the right answer:"
+  echo "     touch \"$DENYLIST\""
+  echo
+  echo "   Or point it somewhere else:"
+  echo "     git config hooks.denylist /path/to/denylist.txt"
   exit 1
 fi
 
 if ! uv run python scripts/check_identifiers.py --denylist "$DENYLIST" >/tmp/orrery-scan.txt 2>&1; then
-  echo "🔴 커밋 차단: 사내 식별자가 발견되었습니다."
+  echo "🔴 commit refused: forbidden identifiers found."
   cat /tmp/orrery-scan.txt
-  echo ""
-  echo "   이 리포는 공개 엔진입니다. 해당 내용은 리포 바깥에 두세요."
+  echo
+  echo "   This repository is published. Keep that content outside it."
   exit 1
 fi
 exit 0

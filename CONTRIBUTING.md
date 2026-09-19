@@ -23,10 +23,19 @@ for you:
 git config core.hooksPath .githooks
 ```
 
-The hook reads a denylist kept **outside** the repository (the list itself is sensitive).
-Point to yours with `ORRERY_DENYLIST=/path/to/denylist.txt`. If it cannot find one, it
-**blocks the commit** rather than letting it through — a guard that silently disables
-itself is worse than no guard, because you stop checking by hand.
+The hook reads a denylist kept **outside** the repository, because the list itself is the
+sensitive part. If it cannot find one it **blocks the commit** rather than letting it
+through — a guard that silently disables itself is worse than no guard, because you stop
+checking by hand once you believe something is watching.
+
+Contributing from outside any organization with things to hide? Then an empty file is the
+correct denylist, and the hook says so when it stops you:
+
+```bash
+touch ~/.orrery-denylist
+```
+
+Point it elsewhere with `git config hooks.denylist /path/to/file` or `ORRERY_DENYLIST`.
 
 Connectors to real systems belong in your own repository, which depends on orrery.
 orrery never depends on it.
@@ -35,7 +44,7 @@ orrery never depends on it.
 
 ```bash
 uv sync
-uv run pytest            # 15 tests
+uv run pytest
 uv run ruff check .
 ```
 
@@ -56,12 +65,14 @@ In rough order of value:
    only for a while. A checkout service queues and retries when its payment provider
    dies, then the queue fills and it stops. `propagate()` has no clock, so it cannot
    express "soft for forty minutes, hard after that".
-2. **Event severity in propagation.** Today, when a degrade and a down reach the same
-   entity, arrival order decides the outcome. Events need severity so the stronger one
-   wins regardless of order.
-3. **Behavior models.** The built-ins are deliberately simple. Load balancers, stateful
-   sets, and cross-region failover all deserve better ones.
-4. **A scenario runner.** The format exists in `orrery.scenarios`; nothing executes it.
+2. **Degradation has no magnitude.** An entity is slow or it is not, so degradation
+   cannot attenuate; `MAX_DEGRADE_HOPS` in `propagate.py` is a blunt bound standing in
+   for the real answer. Losing two of three replicas is worse than losing one and the
+   engine cannot say so.
+3. **Behavior models.** The built-ins are deliberately simple. Stateful sets, quorum
+   databases, and cross-region failover all deserve better ones.
+4. **Connectors for public systems.** Kubernetes is the only one. A connector is the
+   difference between this being usable and being a library.
 
 ## Pull requests
 

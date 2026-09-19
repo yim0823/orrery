@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.12"
 
 [options]
-exclude-newer = "2026-09-12T10:24:22.629249Z"
+exclude-newer = "2026-09-12T12:54:04.304457Z"
 exclude-newer-span = "P7D"
 
 [[package]]
@@ -86,7 +86,7 @@ wheels = [
 
 [[package]]
 name = "orrery"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "networkx" },

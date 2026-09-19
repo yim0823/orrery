@@ -17,10 +17,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import networkx as nx
+
 from orrery.schema import EntityKind, RelationKind
 
 from .graph import World
-from .query import blast_radius
 
 _PLACEABLE = (EntityKind.SERVICE, EntityKind.DATABASE, EntityKind.NODE)
 _ROOTS = (EntityKind.SITE, EntityKind.EXTERNAL, EntityKind.NETWORK_SEGMENT)
@@ -134,7 +135,17 @@ def audit(world: World) -> MapAudit:
 
         if e.kind is EntityKind.CLUSTER and e.attrs.get("quorum"):
             members = len(world.in_edges(e.id, RelationKind.MEMBER_OF))
-            quorum = int(e.attrs["quorum"])
+            try:
+                quorum = int(e.attrs["quorum"])
+            except (TypeError, ValueError):
+                a.findings.append(
+                    Finding(
+                        "quorum is not a number",
+                        e.id,
+                        f"quorum={e.attrs['quorum']!r} — propagation will refuse this",
+                    )
+                )
+                continue
             if members < quorum:
                 a.findings.append(
                     Finding(
@@ -182,6 +193,55 @@ class Risk:
         }
 
 
+def _reach_sizes(world: World) -> dict[str, int]:
+    """How many entities each one takes with it, for every entity at once.
+
+    The obvious implementation — a traversal per entity — costs the sum of all reaches,
+    which on a real estate is dominated by a handful of hubs that each reach most of it.
+    Measured, that was minutes on twenty-five thousand entities while the docstring
+    claimed it was fine.
+
+    So: collapse cycles into single nodes, then walk the resulting DAG once in reverse
+    topological order, carrying each node's reachable set as a Python integer used as a
+    bitset. Union becomes `|`, which runs in C over machine words instead of hashing one
+    string at a time. Same answer, and the cost stops being the thing that decides
+    whether anyone runs the command.
+    """
+    from orrery.sim.propagate import _DEPENDENT_EDGES
+
+    ids = [e.id for e in world.entities()]
+    index = {eid: i for i, eid in enumerate(ids)}
+
+    # Edges point the way consequence travels: X -> everything that fails with X.
+    g = nx.DiGraph()
+    g.add_nodes_from(ids)
+    for eid in ids:
+        for dep in world.dependents(eid, _DEPENDENT_EDGES):
+            g.add_edge(eid, dep)
+
+    condensed = nx.condensation(g)
+    members: dict[int, list[str]] = {}
+    for eid, comp in condensed.graph["mapping"].items():
+        members.setdefault(comp, []).append(eid)
+
+    bits: dict[int, int] = {}
+    for comp in reversed(list(nx.topological_sort(condensed))):
+        own = 0
+        for eid in members[comp]:
+            own |= 1 << index[eid]
+        acc = own
+        for succ in condensed.successors(comp):
+            acc |= bits[succ]
+        bits[comp] = acc
+
+    mapping = condensed.graph["mapping"]
+    sizes: dict[str, int] = {}
+    for eid in ids:
+        # An entity does not count itself, and a cycle counts its peers but not itself.
+        sizes[eid] = (bits[mapping[eid]] & ~(1 << index[eid])).bit_count()
+    return sizes
+
+
 def single_points_of_failure(
     world: World, limit: int = 20, kinds: tuple[EntityKind, ...] | None = None
 ) -> list[Risk]:
@@ -189,20 +249,19 @@ def single_points_of_failure(
 
     This is structural reach, not predicted damage — it deliberately does not run the
     behavior models. Redundancy is exactly what this list exists to find missing, and
-    scoring with replicas in mind would quietly forgive the entity whose redundancy is
-    recorded but not real.
+    scoring with declared replicas in mind would quietly forgive the entity whose
+    redundancy is recorded but not real.
 
-    Cost is one traversal per entity. Fine for tens of thousands; sample or filter by
-    kind beyond that.
+    One pass over the whole graph regardless of how many entities are ranked, so
+    narrowing by `kinds` filters the output rather than saving work.
     """
     total = max(1, len(world) - 1)
-    out: list[Risk] = []
-    for e in world.entities():
-        if kinds and e.kind not in kinds:
-            continue
-        reach = len(blast_radius(world, e.id).impacted)
-        if reach:
-            out.append(Risk(e.id, e.kind.value, e.name, reach, reach / total))
+    sizes = _reach_sizes(world)
+    out = [
+        Risk(e.id, e.kind.value, e.name, sizes[e.id], sizes[e.id] / total)
+        for e in world.entities()
+        if sizes.get(e.id) and not (kinds and e.kind not in kinds)
+    ]
     out.sort(key=lambda r: (-r.reach, r.entity_id))
     return out[:limit]
 

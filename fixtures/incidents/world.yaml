@@ -128,7 +128,6 @@ entities:
   status: up
 - attrs:
     engine: postgres
-    replica: true
   id: db-orders
   kind: database
   name: orders
@@ -139,7 +138,6 @@ entities:
   status: up
 - attrs:
     engine: mysql
-    replica: false
   id: db-stock
   kind: database
   name: stock
@@ -379,6 +377,15 @@ relations:
   strength: hard
 - attrs: {}
   dst: host-a2
+  kind: RUNS_ON
+  provenance:
+  - observed_at: null
+    source: static_yaml
+    source_id: fixtures/demo-world.yaml
+  src: db-orders
+  strength: hard
+- attrs: {}
+  dst: host-b1
   kind: RUNS_ON
   provenance:
   - observed_at: null

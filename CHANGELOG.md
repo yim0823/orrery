@@ -6,6 +6,99 @@ The format is loosely [Keep a Changelog](https://keepachangelog.com/). Versions 
 semantic versioning, with the usual pre-1.0 caveat: minor versions may break things, and
 this section of the file will say so when they do.
 
+## [0.2.0] — 2026-09-19
+
+Four adversarial reviewers were pointed at 0.1.0 and told to break it. They did. This
+release is what they found, and the most useful thing in it is not any single fix — it is
+that a mutation sweep broke the source in twenty-two small ways and **nineteen of those
+mutations passed 142 green tests**. Test count is not evidence.
+
+### Fixed — the engine was wrong
+
+- **A service on forty-nine healthy nodes was reported down when one rebooted.** Two
+  reviewers found this independently, and 0.1.0's changelog claimed it was already fixed:
+  propagation counted surviving places to run, and then the behavior model threw the count
+  away and re-derived redundancy from an `attrs["replicas"]` that defaulted to 1. Behavior
+  models no longer count anything. Whatever needs the graph is decided in `propagate` and
+  arrives encoded in the event.
+- **A network segment failing computed as affecting nothing.** `CONNECTS_TO` was excluded
+  from impact, justified as "communication is symmetric". A host's sole attachment to a
+  VLAN is not symmetric, and the exclusion made an entire class of outage invisible. Worse,
+  `blast` and `simulate` kept separate edge lists and so disagreed with each other; there
+  is now one list.
+- **`replica: true` is gone.** An attribute asserting a replica exists is a claim the graph
+  can check, and `orrery check` already flags that exact shape as redundancy on paper only.
+  Believing it in the engine had the tool contradict its own audit, in the direction that
+  hides an outage — telling it a database was down got you "degraded". Redundancy is now
+  somewhere to run, counted.
+- **A database on a degraded host was reported healthy.** `DatabaseModel` returned no
+  status for degradation at all.
+- **An unreachable node counted as a place to run.** Survivors were "not DOWN", which let
+  UNKNOWN through. A node the inventory cannot reach during the incident you are simulating
+  is not evidence of a survivor.
+- **Degradation had no horizon.** One shared optional sink painted every service that
+  transitively touched it. `MAX_DEGRADE_HOPS` bounds it, and says in its own docstring that
+  it is a blunt instrument standing in for capacity modelling.
+- **Losing a backend did not thin a load balancer's pool.** `MEMBER_OF` was only read
+  upward when quorum was declared.
+- **Unknown event names propagated nothing and returned success.** A typo produced a clean,
+  empty, confident result.
+
+### Fixed — the fork leaked
+
+- **Forking a fork returned a pristine world.** `run_scenario` and `replay` both fork
+  whatever they are handed, so a world that had already failed came back healthy.
+- **Adding an entity to a fork edited the parent.** `MultiDiGraph.copy()` is shallow, so
+  the merge in `add_entity` reached through the shared `Entity` object. The `_detach`
+  docstring warned about exactly this bug while causing it.
+
+### Fixed — the rubric mis-scored
+
+- `irreversible_count` was inferred from the `reversible` axis, so five irreversible
+  actions reported as three, and a scenario scoring rule that lowered the axis
+  manufactured irreversible actions that never happened.
+- The runner and the rubric disagreed about what a read is, so an agent that called
+  `get_series` before acting was marked down for acting without evidence.
+- Escalating with no declared deadline scored as late.
+
+### Fixed — the backtest could not see its own blind spot
+
+- **Precision counted only predictions somebody checked.** Over-prediction was free: an
+  engine painting half the estate red is never wrong about the half nobody looked at. The
+  report now prints how many predictions went unverified and says precision is an upper
+  bound.
+- **`exact` was padded by healthy entities.** A record listing forty `up` rows lifted the
+  score without the engine getting anything hard right. `on breaks` counts only what broke.
+- **A typo in an observed id silently removed a judgement**, which flattered the score. It
+  is now refused with the id and the file.
+- **Replaying every incident against one snapshot is flagged** as measuring hindsight
+  rather than prediction.
+
+### Changed
+
+- **`orrery spof` went from 228 s to 0.3 s on 25k entities** — measured, not estimated.
+  It was a traversal per entity; it is now a bitset DP over the graph's condensation, and
+  a test asserts the fast answer equals the slow one. 63k entities takes a second.
+- **Quorum checking was quadratic per cluster**: 5.2 s for a four-thousand-member cluster,
+  which is the shape a real one has. Member counts are memoized within a call: 108 ms.
+- Six entity kinds added — `queue`, `storage`, `dns`, `certificate`, `cdn`, `job` — each
+  because it fails differently from everything already there.
+- The file format reads what it writes. Ingesting a saved snapshot crashed on duplicate
+  provenance, which made "edit a snapshot and try again" impossible.
+- Unknown ids, unknown events, unknown kinds and missing files produce a sentence and a
+  suggestion instead of a traceback.
+- Ids arriving twice under different names or kinds are reported rather than merged in
+  silence.
+- The commit hook tells an outside contributor how to satisfy it. Fail-closed with no
+  documented way through is a wall, not a guard.
+- Neo4j paging orders its queries. `SKIP`/`LIMIT` across separate queries without an
+  `ORDER BY` silently duplicates or drops rows.
+
+### Removed
+
+Dead code the mutation sweep found by breaking it with no test failing: `Report.worst`,
+`Comparison.recall`, and an unreachable branch in the soft-edge cap.
+
 ## [0.1.0] — 2026-09-19
 
 First version worth depending on. The engine answers its question, measures whether the
