@@ -134,6 +134,66 @@ is an error; both are worth someone looking at before the map is trusted.
 
 ---
 
+## The two layers of a map
+
+A dependency map is built from two kinds of edge, and they come from different places, cost
+different amounts of effort, and answer different halves of the question. Confusing them is
+the most expensive mistake available here, because a map with only the first kind looks
+finished and answers wrongly.
+
+```mermaid
+flowchart TB
+  subgraph call["Call layer — who talks to whom"]
+    direction LR
+    web["storefront"] -->|DEPENDS_ON| checkout["checkout"]
+    checkout -->|DEPENDS_ON| inventory["inventory"]
+    inventory -->|DEPENDS_ON| db[("stock db")]
+  end
+
+  subgraph infra["Infrastructure layer — what sits on what"]
+    direction LR
+    node["node"] -->|RUNS_ON| host["host"]
+    host -->|HOSTED_IN| site["site"]
+    host -->|CONNECTS_TO| seg["segment"]
+    node -->|MEMBER_OF| cluster["cluster"]
+  end
+
+  call -.->|"RUNS_ON: a service runs on a node"| infra
+```
+
+| | Infrastructure layer | Call layer |
+|---|---|---|
+| The question | what sits on what | who talks to whom |
+| Edges | `RUNS_ON`, `HOSTED_IN`, `MEMBER_OF`, `CONNECTS_TO` | `DEPENDS_ON` |
+| Where it comes from | inventory: a CMDB, a cloud API, Kubernetes | **not in any inventory** — it is what the code does |
+| Effort | a connector per source | the hard part, see below |
+| Without it | you have no map at all | "this server is down" instead of "checkout stops" |
+
+The two join on identity: a service in the call layer `RUNS_ON` a node in the
+infrastructure layer. Getting that join right is what entity resolution is for, and getting
+it wrong splits one thing into two and makes both answers wrong.
+
+### Where the call layer actually comes from
+
+Every inventory system knows where things run. None of them knows what calls what, because
+that is a property of running code rather than of an asset register. There are three ways
+to find out, and only one of them is usually available:
+
+| Approach | Touches the application? | What it costs you |
+|---|---|---|
+| **Distributed tracing** — OpenTelemetry, Jaeger, Zipkin | **Yes** — a library in every service | Realistic only where every service can be instrumented and every hop propagates context. One service that does not breaks the graph from there on. Not an option for legacy or native code. |
+| **eBPF** — Pixie, SkyWalking Rover, Cilium Hubble | No | Kubernetes-shaped, kernel requirements, an agent on every node |
+| **Connection observation** — flow logs, firewall logs, socket tables (`osquery process_open_sockets`, `ss`) | **No** | Coarse: you learn `host A → host B:9000`, not which endpoint. Traffic that never crosses an observation point is invisible. |
+
+The third is the one that works on an estate you did not design, and it is the one most
+tools skip because they assume tracing. Joining "A talks to B on port 9000" with "port 9000
+on B is the inventory service" gives you a `DEPENDS_ON` edge without touching a single
+application.
+
+Coarse is enough here. Blast radius asks what breaks, not which endpoint breaks.
+
+---
+
 ## Modeling your own infrastructure
 
 A world is **entities** and **relations**, nothing else.
@@ -167,16 +227,17 @@ There are sixteen entity kinds (`orrery ingest` will list them if you mistype on
 ones in the demo are `site`, `host`, `cluster`, `node`, `service`, `database`,
 `load_balancer` and `external`. Each kind earns its place by failing differently.
 
-| Kind | Reads as |
-|---|---|
-| `RUNS_ON` | service runs on node; node runs on host |
-| `HOSTED_IN` | host is hosted in a site |
-| `MEMBER_OF` | node is a member of a cluster |
-| `DEPENDS_ON` | service depends on a database |
-| `CONNECTS_TO` | host talks to a network segment |
+| Kind | Layer | Reads as |
+|---|---|---|
+| `RUNS_ON` | infrastructure | service runs on node; node runs on host |
+| `HOSTED_IN` | infrastructure | host is hosted in a site |
+| `MEMBER_OF` | infrastructure | node is a member of a cluster |
+| `CONNECTS_TO` | infrastructure | host is attached to a network segment |
+| `DEPENDS_ON` | call | service depends on a database |
 
-The first four propagate impact. `CONNECTS_TO` does not — communication is symmetric
-and does not imply "if A dies, B dies".
+All five propagate impact. `CONNECTS_TO` was excluded once, on the reasoning that
+communication is symmetric — but a host's single attachment to a segment is not symmetric,
+and the exclusion made every top-of-rack failure compute as affecting nothing.
 
 ### Hard and soft dependencies
 

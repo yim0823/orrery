@@ -45,7 +45,86 @@ particular organization.
 
 ---
 
-## 2. The data model
+## 2. The two layers, and where each comes from
+
+Before the data model: a map is built from two kinds of edge that come from different
+places and cost very different amounts of effort. Most of what follows is a consequence of
+keeping them distinct.
+
+```mermaid
+flowchart TB
+  subgraph sources["Sources — all outside this repo"]
+    direction LR
+    cmdb[("CMDB · cloud API · Kubernetes")]
+    flows[("flow logs · firewall logs · socket tables")]
+    traces[("traces or eBPF, where available")]
+  end
+
+  subgraph layers["The map"]
+    direction TB
+    call["Call layer — DEPENDS_ON<br/>who talks to whom"]
+    infra["Infrastructure layer<br/>RUNS_ON · HOSTED_IN · MEMBER_OF · CONNECTS_TO<br/>what sits on what"]
+    call -->|joins on identity| infra
+  end
+
+  subgraph answers["What the engine computes"]
+    direction LR
+    blast["blast<br/>what is in range"]
+    sim["simulate<br/>what actually breaks"]
+    spof["spof<br/>what is most dangerous"]
+    chk["check<br/>is this map any good"]
+    back["backtest<br/>was it right last time"]
+  end
+
+  cmdb --> infra
+  flows --> call
+  traces --> call
+  layers --> answers
+```
+
+| | Infrastructure layer | Call layer |
+|---|---|---|
+| Question | what sits on what | who talks to whom |
+| Edges | `RUNS_ON`, `HOSTED_IN`, `MEMBER_OF`, `CONNECTS_TO` | `DEPENDS_ON` |
+| Source | an inventory: CMDB, cloud API, Kubernetes | **no inventory has it** — it is a property of running code |
+| Cost | a connector per source | the hard part |
+| Missing it means | there is no map | "a server is down" rather than "checkout stops" |
+
+**The join between them is the risk.** A service in the call layer `RUNS_ON` a node in the
+infrastructure layer, and those two records usually come out of different systems that name
+the same thing differently. A wrong join splits one service into two, and then both halves
+answer confidently and wrongly. Entity resolution exists for this seam, and it refuses to
+guess (§6).
+
+### Getting the call layer without instrumenting everything
+
+Three ways exist, and they are not equally available:
+
+| Approach | Touches the application? | The catch |
+|---|---|---|
+| Distributed tracing — OpenTelemetry, Jaeger, Zipkin | **yes**, a library in every service | Realistic only where every service can be instrumented and every hop propagates context. One service that cannot breaks the graph downstream of it, and native or legacy code usually cannot. |
+| eBPF — Pixie, SkyWalking Rover, Hubble | no | Kubernetes-shaped; kernel requirements; an agent per node |
+| Connection observation — flow logs, firewall logs, socket tables | **no** | Coarse: `host A → host B:9000`, not which endpoint. Traffic that never crosses an observation point is invisible. |
+
+Most tools in this space assume the first, which is why they work beautifully on a
+green-field Kubernetes estate and barely at all on one that grew over fifteen years.
+
+The third builds a usable call layer by joining two facts, neither of which requires
+touching an application:
+
+```
+"host A sends traffic to host B:9000"           (flow or firewall log)
+"port 9000 on host B is the inventory service"  (process listing)
+────────────────────────────────────────────────
+A's service DEPENDS_ON the inventory service
+```
+
+Coarse is enough here. Blast radius asks what breaks, not which endpoint breaks, and for
+that question a listening port is a service.
+
+---
+
+## 3. The data model
 
 Kept small on purpose. A model that grows to hold every organization's circumstances ends
 up fitting none of them.
@@ -101,7 +180,7 @@ so it does not imply "if A dies, B dies".
 
 ---
 
-## 3. blast radius — structural range
+## 4. blast radius — structural range
 
 `src/orrery/world/query.py`
 
@@ -129,7 +208,7 @@ over the graph database you already run.
 
 ---
 
-## 4. propagate — behavioral consequence
+## 5. propagate — behavioral consequence
 
 `src/orrery/sim/propagate.py`
 
@@ -301,7 +380,7 @@ only sees the entity it was handed.
 
 ---
 
-## 5. Entity resolution — why nothing merges automatically
+## 6. Entity resolution — why nothing merges automatically
 
 `src/orrery/resolve/`
 
@@ -323,7 +402,7 @@ confirmed aliases in your own repository and apply them at ingest.
 
 ---
 
-## 6. The four-axis rubric — grading an agent
+## 7. The four-axis rubric — grading an agent
 
 `src/orrery/scoring/rubric.py`
 
@@ -347,7 +426,7 @@ controller recreates it — so it counts as reversible.
 
 ---
 
-## 7. Extension points
+## 8. Extension points
 
 Three places are meant to be changed.
 
@@ -431,7 +510,7 @@ the parent instead would be a bug that only surfaces in whatever ran next.
 
 ---
 
-## 8. Snapshot diffing
+## 9. Snapshot diffing
 
 `src/orrery/world/diff.py`
 
@@ -450,7 +529,7 @@ to hard changes every answer downstream of it.
 
 ---
 
-## 9. The CLI, and reading it from a machine
+## 10. The CLI, and reading it from a machine
 
 `src/orrery/cli.py`
 
@@ -482,7 +561,7 @@ instead of oracular.
 
 ---
 
-## 10. What we did not do, and why
+## 11. What we did not do, and why
 
 | Not done | Why |
 |---|---|
@@ -495,7 +574,7 @@ instead of oracular.
 
 ---
 
-## 11. Backtesting — measuring whether the map is right
+## 12. Backtesting — measuring whether the map is right
 
 `src/orrery/backtest/`
 
@@ -546,7 +625,7 @@ blast radius is the most likely way to misuse this.
 
 ---
 
-## 12. What this engine still gets wrong
+## 13. What this engine still gets wrong
 
 Run against the demo fixtures today:
 
@@ -588,7 +667,7 @@ measures nothing.
 
 ---
 
-## 13. Performance
+## 14. Performance
 
 These are one laptop's numbers — an Apple M4 Pro running Python 3.14. Treat them as an order
 of magnitude, not a specification. Reproduce and disagree with them:
@@ -648,7 +727,7 @@ happened to land on that host, so there was nothing to walk.
 
 ---
 
-## 14. Layer summary
+## 15. Layer summary
 
 | Layer | Module | What it does |
 |---|---|---|
@@ -666,7 +745,7 @@ happened to land on that host, so there was nothing to walk.
 
 ---
 
-## 15. The rule of this repository
+## 16. The rule of this repository
 
 Company names, hostnames, IP ranges, internal system names, team names and real incident
 data **may not enter.** Every fixture is synthetic.
