@@ -257,6 +257,29 @@ someone acts on that answer at 3am.
 
 ---
 
+## Grading a map you already have
+
+You do not need to adopt the engine to use the harness. If your dependencies already live
+in a graph, read them out, and let your own past incidents tell you how good that map is:
+
+```python
+from orrery.adapters.neo4j import LabelMap, Neo4jSource
+from orrery.schema import EntityKind, RelationKind
+
+world = Neo4jSource(driver, LabelMap(
+    entity_labels={"Server": EntityKind.HOST, "App": EntityKind.SERVICE},
+    relation_types={"DEPLOYED_ON": RelationKind.RUNS_ON, "CALLS": RelationKind.DEPENDS_ON},
+)).load()
+world.save("snapshots/2026-03.yaml")
+```
+
+Then write incidents against that snapshot and run `orrery backtest`. The number that
+comes out — "the map predicted 19 of 26 impacts, missed 2, over-called 2" — is a claim
+about your map, not about this tool, and it is the only artifact in this space that lets
+you say anything precise about a dependency map at all.
+
+---
+
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md) — data model, propagation, extension points, tradeoffs
@@ -286,7 +309,14 @@ but if you need a clean provenance chain, this is not yet it.
 | Map audit (`check`) and risk ranking (`spof`) | Materializing part of the world as real running systems |
 | Backtesting harness | |
 
-**Accuracy is the open problem, and there is now a way to measure it.**
+**Accuracy is the open problem, and measuring it is the part nobody else does.**
+
+Plenty of tools will draw you a dependency map. Reviewing the field in 2026 — CMDB and
+application-dependency-mapping products, observability service maps, chaos platforms,
+developer portals — none of them score their own map against what actually happened in
+past incidents. That is what this harness does, and **it does not require the map to be
+orrery's.** Point `orrery.adapters.neo4j` at a graph you already run, save the snapshot,
+write your incidents against it, and the thing being graded is your existing map.
 
 ```console
 $ orrery backtest fixtures/incidents

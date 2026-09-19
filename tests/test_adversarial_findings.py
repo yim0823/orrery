@@ -322,3 +322,81 @@ def test_a_relation_to_a_missing_entity_is_refused():
     w.add_entity(Entity(id="a", kind=EntityKind.HOST, name="a"))
     with pytest.raises(KeyError, match="unknown entity"):
         w.add_relation(Relation(src="a", dst="ghost", kind=RelationKind.HOSTED_IN))
+
+
+# ---- the harness must work on a map orrery did not build ----
+
+
+def test_a_map_read_from_an_external_graph_can_be_backtested():
+    """The strongest argument for this project is that nothing else scores a dependency
+    map against past incidents, and that argument only holds if the map can be someone
+    else's. So the whole path is exercised: read a graph, snapshot it, replay an incident
+    against the snapshot."""
+    import yaml
+
+    from orrery.adapters.neo4j import LabelMap, Neo4jSource
+    from orrery.backtest import Incident, run
+
+    nodes = [
+        {"labels": ["Server"], "props": {"id": "h1", "name": "h1"}},
+        {"labels": ["App"], "props": {"id": "api", "name": "api"}},
+        {"labels": ["App"], "props": {"id": "web", "name": "web"}},
+    ]
+    rels = [
+        {"src": "api", "dst": "h1", "type": "DEPLOYED_ON", "props": {}},
+        {"src": "web", "dst": "api", "type": "CALLS", "props": {}},
+    ]
+
+    class _Session:
+        def run(self, query, **p):
+            rows = (
+                [
+                    {"labels": n["labels"], "props": n["props"]}
+                    for n in nodes
+                    if any(label in p["labels"] for label in n["labels"])
+                ]
+                if "MATCH (n)" in query
+                else [r for r in rels if r["type"] in p["types"]]
+            )
+            return rows[p["skip"] : p["skip"] + p["limit"]]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    class _Driver:
+        def session(self, **kw):
+            return _Session()
+
+    world = Neo4jSource(
+        _Driver(),
+        LabelMap(
+            entity_labels={"Server": EntityKind.HOST, "App": EntityKind.SERVICE},
+            relation_types={
+                "DEPLOYED_ON": RelationKind.RUNS_ON,
+                "CALLS": RelationKind.DEPENDS_ON,
+            },
+        ),
+    ).load()
+
+    with tempfile.TemporaryDirectory() as d:
+        root = pathlib.Path(d)
+        world.save(root / "world.yaml")
+        (root / "INC-A.yaml").write_text(
+            yaml.safe_dump(
+                {
+                    "id": "INC-A",
+                    "title": "the host died",
+                    "world": "world.yaml",
+                    "trigger": "h1",
+                    "event": "down",
+                    "observed": {"api": "down", "web": "down"},
+                }
+            )
+        )
+        report = run(Incident.load_dir(root))
+
+    assert report.scored == 2
+    assert report.recall() == 1.0
