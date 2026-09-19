@@ -135,12 +135,16 @@ def test_backtest_json_exposes_every_judgement():
     assert len(judgements) == payload["scored"]
 
 
-def test_json_output_is_parseable_from_a_pipe():
+def test_json_output_is_parseable_from_a_pipe(demo_world_file):
     # The point of this flag is another program reading it, so check the real thing.
     # It used to fall back to a different invocation on failure, which meant a broken
     # module entry point silently swapped the thing under test for one that worked.
+    # A separate process cannot see the patched state path, so it is passed explicitly.
     out = subprocess.run(
-        [sys.executable, "-m", "orrery", "blast", "site-a", "--json-out"],
+        [
+            sys.executable, "-m", "orrery", "blast", "site-a",
+            "--world", str(demo_world_file), "--json-out",
+        ],
         capture_output=True, text=True, check=True,
     )
     assert json.loads(out.stdout)["root"] == "site-a"
