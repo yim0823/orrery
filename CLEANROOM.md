@@ -19,7 +19,19 @@ Allowed: synthetic fixtures, generic connector interfaces, generic behavior mode
 uv run python scripts/check_identifiers.py --denylist <path outside this repo>/denylist.txt
 ```
 
-Wire this into pre-commit and CI of the company-specific repo, pointing at this repo's tree.
+This is wired into `.githooks/pre-commit` and `.githooks/pre-push`, enabled with:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+The hook **fails closed**: if the denylist cannot be found, the commit is refused
+rather than allowed. A guard that silently disables itself on a new machine is
+worse than no guard, because you stop checking by hand. Override the location
+with `ORRERY_DENYLIST` if you keep it somewhere else.
+
+Anyone cloning this repo must set `core.hooksPath` themselves — git does not ship
+hooks on clone. Until they do, they have no guard.
 
 ## Dependency direction
 
