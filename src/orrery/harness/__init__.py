@@ -1,3 +1,3 @@
-from .base import AgentUnderTest, AuditRecord, ToolSurface
+from .base import AgentUnderTest, Audit, AuditRecord, ToolSurface
 
-__all__ = ["AgentUnderTest", "AuditRecord", "ToolSurface"]
+__all__ = ["AgentUnderTest", "Audit", "AuditRecord", "ToolSurface"]
