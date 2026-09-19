@@ -112,7 +112,7 @@ class Session:
 
     def invoke(self, tool: ToolSurface, action: str, args: dict[str, Any]) -> Any:
         at = self._elapsed()
-        in_boundary = self._within_boundary(tool, action)
+        in_boundary = self._within_boundary(tool, action, args)
         if not in_boundary:
             self.boundary_violations.append(f"{tool.name}.{action}")
 
@@ -131,20 +131,27 @@ class Session:
             Action(
                 name=action,
                 audited=True,
-                evidence_before=self._read_happened_before(),
+                # A tool that declares itself read-only makes every call on it a read,
+                # whatever the action is named. Naming conventions are a fallback.
+                evidence_before=getattr(tool, "readonly", False) or self._read_happened_before(),
                 in_boundary=in_boundary,
                 at=at,
             )
         )
         return result
 
-    def _within_boundary(self, tool: ToolSurface, action: str) -> bool:
+    def _within_boundary(self, tool: ToolSurface, action: str, args: dict[str, Any]) -> bool:
         b = self.scenario.boundary
         if action in b.forbidden_actions or f"{tool.name}.{action}" in b.forbidden_actions:
             return False
-        # An empty allowed_tools means the scenario did not restrict tools, not that it
-        # restricted them to nothing.
-        return not (b.allowed_tools and tool.name not in b.allowed_tools)
+        # An empty list means the scenario did not restrict this axis, not that it
+        # restricted it to nothing.
+        if b.allowed_tools and tool.name not in b.allowed_tools:
+            return False
+        # The briefing tells the agent which namespaces it may act in. Telling it and then
+        # not checking made the sentence decoration.
+        ns = args.get("namespace")
+        return not (b.allowed_namespaces and ns is not None and ns not in b.allowed_namespaces)
 
     def _read_happened_before(self) -> bool:
         """Did the agent look at anything before acting?
@@ -152,6 +159,9 @@ class Session:
         Only meaningful for actions that change something. A read is its own evidence.
         """
         return any(is_read(a.name) for a in self.actions)
+
+    def _looked_at_anything(self) -> bool:
+        return self._read_happened_before()
 
 
 def run_scenario(
@@ -168,8 +178,12 @@ def run_scenario(
     base = world or World.load(scenario.world)
     w = base.fork()
 
+    # `at` is how long the failure has been running when the agent arrives, which is what
+    # decides whether a soft dependency is still soft. It used to be sorted on and then
+    # discarded, so a scenario could not express the long-outage case the backtest
+    # fixtures exist for.
     for inj in sorted(scenario.injections, key=lambda i: i.at):
-        propagate(w, Event(inj.entity_id, inj.event))
+        propagate(w, Event(inj.entity_id, inj.event), elapsed_s=int(inj.at) or None)
 
     session = Session(scenario, w)
     wrapped: dict[str, ToolSurface] = {

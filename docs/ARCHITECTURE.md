@@ -657,7 +657,7 @@ happened to land on that host, so there was nothing to walk.
 | adapters | `orrery.adapters` | Read a world out of a graph database you already run (`.neo4j`) |
 | resolve | `orrery.resolve` | Propose alias candidates; never merges |
 | world | `orrery.world` | The graph, snapshot and fork, blast radius, `.diff` between snapshots |
-| sim | `orrery.sim` | Clock, behavior models, consequence propagation |
+| sim | `orrery.sim` | behavior models, consequence propagation |
 | scenarios | `orrery.scenarios` | Scenario format, and the runner that breaks the world, hands an agent its tools and scores what it did |
 | scoring | `orrery.scoring` | Four-axis rubric, no-action gate |
 | backtest | `orrery.backtest` | Replay past incidents and grade the engine |

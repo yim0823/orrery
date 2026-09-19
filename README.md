@@ -47,7 +47,7 @@ $ orrery simulate host-a1
   host-a1                  -> down      passthrough
   node-a1                  -> down      passthrough
   db-stock                 -> down      
-  svc-web                  -> degraded  lost one of its places to run
+  svc-web                  -> degraded  dep degraded
   svc-inventory            -> down      hard dep down
   svc-checkout             -> down      hard dep down
 ```
@@ -388,13 +388,17 @@ so to anyone who asks.
 
 Performance, measured rather than asserted — one laptop, `scripts/bench.py`:
 
-| World | blast (whole site) | simulate | fork |
-|---|---|---|---|
-| 25,508 entities | 53 ms | 164 ms | below timer resolution |
-| 127,508 entities | 307 ms | 1.1 s | below timer resolution |
+| World | blast (whole site) | simulate | fork | spof |
+|---|---|---|---|---|
+| 25,508 entities | 53 ms | 164 ms | below timer resolution | 0.3 s, 130 MB |
+| 127,508 entities | 307 ms | 1.1 s | below timer resolution | 5.5 s, 1.3 GB |
 
 The large numbers are the pathological case: a whole site failing and reaching a third of
 the estate. A single host or database is an order of magnitude cheaper.
+
+`spof` is the one to watch, and memory is its limit rather than time — it holds reach as
+a bitset per component, so it grows with the square of the estate. Past a few hundred
+thousand entities it needs a different algorithm, not a bigger machine.
 
 ---
 

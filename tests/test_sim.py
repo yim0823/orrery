@@ -1,6 +1,6 @@
 from orrery.connectors import StaticYamlConnector
 from orrery.schema import Status
-from orrery.sim import Clock, Event, propagate
+from orrery.sim import Event, propagate
 from orrery.world import World
 
 
@@ -42,11 +42,3 @@ def test_losing_one_node_degrades_multi_replica_service():
     w = _world()
     propagate(w, Event("node-b1", "down"))
     assert w.entity("svc-web").status == Status.DEGRADED
-
-
-def test_clock_runs_scheduled_events():
-    fired = []
-    c = Clock()
-    c.at(5, lambda: fired.append(c.now))
-    c.run(until=10)
-    assert fired == [5]

@@ -14,12 +14,24 @@ from orrery.schema import Entity
 _norm_re = re.compile(r"[^a-z0-9]+")
 
 
+_NOISE = ("production", "prod", "live", "service", "svc")
+
+
 def normalize(name: str) -> str:
-    """Lowercase, strip separators and common environment suffixes."""
+    """Lowercase, strip separators and common environment suffixes, in any order.
+
+    The suffixes are stripped repeatedly until none remain, so `billing-svc-prod` and
+    `billing-prod-svc` both become `billing`. A single pass in a fixed order left them as
+    two different strings and so never proposed them as the same thing.
+    """
     n = _norm_re.sub("", name.lower())
-    for suffix in ("prod", "production", "live", "svc", "service"):
-        if n.endswith(suffix) and len(n) > len(suffix) + 2:
-            n = n[: -len(suffix)]
+    stripped = True
+    while stripped:
+        stripped = False
+        for suffix in _NOISE:
+            if n.endswith(suffix) and len(n) > len(suffix) + 2:
+                n = n[: -len(suffix)]
+                stripped = True
     return n
 
 
@@ -37,6 +49,21 @@ class Resolver:
             self.confirm(a)
 
     def confirm(self, alias: Alias) -> None:
+        # A cycle means someone confirmed both "A is really B" and "B is really A". Either
+        # is plausible on its own; together they are a contradiction, and resolving one
+        # silently to itself would hide it until two half-maps disagreed at 3am.
+        cur = alias.canonical
+        seen: set[str] = set()
+        while True:
+            if cur == alias.alias:
+                raise ValueError(
+                    f"alias cycle: {alias.alias} -> {alias.canonical} leads back to "
+                    f"{alias.alias}. One of these confirmations is wrong."
+                )
+            if cur in seen or cur not in self._alias_to_canonical:
+                break
+            seen.add(cur)
+            cur = self._alias_to_canonical[cur]
         self._alias_to_canonical[alias.alias] = alias.canonical
 
     def canonical(self, entity_id: str) -> str:

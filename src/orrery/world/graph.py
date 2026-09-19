@@ -16,6 +16,16 @@ from orrery.resolve import Resolver
 from orrery.schema import Entity, EntityKind, Relation, RelationKind, Status
 
 
+def _private(e: Entity) -> Entity:
+    """A copy of an entity that shares nothing mutable with the original.
+
+    `model_copy` is shallow. Copying `attrs` and not `provenance` left the provenance list
+    shared, so a fork merging a second source into an entity grew the parent's list.
+    Every mutable field is listed here so the next one added is a conscious omission.
+    """
+    return e.model_copy(update={"attrs": dict(e.attrs), "provenance": list(e.provenance)})
+
+
 class World:
     def __init__(self) -> None:
         self.g = nx.MultiDiGraph()
@@ -45,7 +55,7 @@ class World:
         self.g = self.g.copy()
         for node, data in self.g.nodes(data=True):
             e: Entity = self._overlay.get(node) or data["entity"]
-            data["entity"] = e.model_copy(update={"attrs": dict(e.attrs)})
+            data["entity"] = _private(e)
         self._overlay = None
 
     def add_entity(self, e: Entity) -> None:
@@ -54,8 +64,9 @@ class World:
         Merging is the point when two sources describe the same thing — that is how an
         entity ends up cross-confirmed. It is a collision when one source describes two
         different things under one id, and the two are indistinguishable from here, so
-        the merge is recorded rather than announced. `collisions` is what `ingest`
-        reports and what `check` reads.
+        the merge is recorded rather than announced. `collisions` is reported by
+        `ingest` at the moment it happens; it is not persisted in a snapshot, because by
+        then the two records are one and there is nothing left to show.
         """
         self._detach()
         if e.id in self.g:
@@ -66,6 +77,12 @@ class World:
                 )
             if existing.name != e.name:
                 self.collisions.append((e.id, existing.name, e.name))
+            if existing.status != e.status and e.status is not Status.UP:
+                # Two sources, two opinions about whether it is up. The first one wins,
+                # which is arbitrary, so the disagreement is recorded rather than lost.
+                self.collisions.append(
+                    (e.id, f"status {existing.status.value}", f"status {e.status.value}")
+                )
             existing.provenance.extend(e.provenance)
             existing.attrs.update(e.attrs)
         else:
@@ -170,10 +187,7 @@ class World:
         w._overlay = (
             {}
             if self._overlay is None
-            else {
-                k: v.model_copy(update={"attrs": dict(v.attrs)})
-                for k, v in self._overlay.items()
-            }
+            else {k: _private(v) for k, v in self._overlay.items()}
         )
         return w
 
@@ -190,8 +204,7 @@ class World:
             return self.g.nodes[entity_id]["entity"]
         hit = self._overlay.get(entity_id)
         if hit is None:
-            source: Entity = self.g.nodes[entity_id]["entity"]
-            hit = source.model_copy(update={"attrs": dict(source.attrs)})
+            hit = _private(self.g.nodes[entity_id]["entity"])
             self._overlay[entity_id] = hit
         return hit
 

@@ -33,7 +33,7 @@ Five properties. A staging environment has the first one at best.
 |---|---|---|
 | **Completeness** | every server, service, database, network path and dependency is on the map, not just the part you meant to test | built — the map is as complete as your connectors are |
 | **Consequence physics** | any action produces a computed consequence across the whole estate, not only locally | built — `propagate`, with hard/soft edges, quorum, and a clock |
-| **Time** | simulated time flows, and can be run faster than real time | partial — relations have tolerances and callers pass elapsed time, but nothing advances a clock on its own |
+| **Time** | simulated time flows, and can be run faster than real time | partial — relations declare tolerances and callers pass elapsed time, but nothing advances a clock on its own. A SimPy wrapper existed for a while, used by nothing; carrying a dependency for a phase that has not started is a cost with no return, so it was removed |
 | **Persistence and forking** | state persists, and worlds fork so experiments can run in parallel | built — `save`/`load`/`fork`, and forking is cheap enough to do per query |
 | **Multiple actors** | several agents, synthetic traffic and event generators act at the same time | not built — one event, one settle, one agent |
 
@@ -58,8 +58,9 @@ one — which is what an actual incident is, and what no evaluation currently re
 
 ## What this would be built on
 
-Already used: `networkx` for the graph, `SimPy` for the clock, `pydantic` for the schema,
-with an optional Neo4j adapter for reading a graph you already run.
+Already used: `networkx` for the graph and `pydantic` for the schema, with an optional
+Neo4j adapter for reading a graph you already run. That is the whole dependency list, and
+it is short on purpose.
 
 Likely later, by need rather than by plan:
 

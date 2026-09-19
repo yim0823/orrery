@@ -8,7 +8,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class EntityKind(StrEnum):
@@ -79,6 +79,10 @@ class Provenance(BaseModel):
 
 
 class Entity(BaseModel):
+    # `strenght: soft` used to ingest as hard with no message. A typo in a field name is
+    # the one mistake that produces a confident wrong answer instead of an error.
+    model_config = ConfigDict(extra="forbid")
+
     id: str
     kind: EntityKind
     name: str
@@ -88,6 +92,8 @@ class Entity(BaseModel):
 
 
 class Relation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     src: str
     dst: str
     kind: RelationKind

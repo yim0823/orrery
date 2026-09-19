@@ -1,4 +1,3 @@
-from .clock import Clock
-from .propagate import Event, propagate
+from .propagate import INJECTABLE_EVENTS, MAX_DEGRADE_HOPS, Event, propagate
 
-__all__ = ["Clock", "Event", "propagate"]
+__all__ = ["INJECTABLE_EVENTS", "MAX_DEGRADE_HOPS", "Event", "propagate"]

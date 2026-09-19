@@ -153,7 +153,6 @@ def score_trace(t: Trace) -> Score:
         notes=notes,
         irreversible_count=len(irreversible),
     )
-    s._irrev = len(irreversible)
     return s
 
 

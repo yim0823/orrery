@@ -7,11 +7,13 @@ import pathlib
 import sys
 
 import typer
+import yaml
 
 from orrery.backtest import Incident, Outcome, format_report, run
 from orrery.connectors import StaticYamlConnector
 from orrery.resolve import Resolver
 from orrery.sim import Event, propagate
+from orrery.sim.propagate import INJECTABLE_EVENTS
 from orrery.world import (
     EntityKind,
     World,
@@ -26,14 +28,6 @@ app = typer.Typer(
     help="orrery: every server is on the map, and when you act, the consequence is computed."
 )
 _STATE = pathlib.Path(".orrery/world.yaml")
-
-KNOWN_EVENTS = frozenset({"down", "degraded"})
-"""Events a person can inject from the command line.
-
-The rest — `dependency_down`, `place_lost` and friends — are produced by propagation and
-are not things that happen to an entity from outside. Accepting an arbitrary string here
-meant a typo printed a clean, empty, confident result.
-"""
 
 SCHEMA_VERSION = 1
 """Bumped when the shape of --json output changes incompatibly.
@@ -76,6 +70,14 @@ def friendly(fn):
             return fn(*args, **kwargs)
         except FileNotFoundError as exc:
             raise typer.BadParameter(f"no such file: {exc.filename}") from exc
+        except IsADirectoryError as exc:
+            raise typer.BadParameter(f"{exc.filename} is a directory, not a file") from exc
+        except KeyError as exc:
+            # The engine raises KeyError for an id it does not know. By the time it gets
+            # here the message already names the id; a traceback would only bury it.
+            raise typer.BadParameter(exc.args[0] if exc.args else str(exc)) from exc
+        except yaml.YAMLError as exc:
+            raise typer.BadParameter(f"not valid YAML: {exc}") from exc
         except ValueError as exc:
             raise typer.BadParameter(str(exc)) from exc
 
@@ -174,9 +176,9 @@ def simulate(
     """
     w = _load(world).fork()
     entity_id = _resolve(w, entity_id)
-    if event not in KNOWN_EVENTS:
+    if event not in INJECTABLE_EVENTS:
         raise typer.BadParameter(
-            f"unknown event {event!r}. Known: {', '.join(sorted(KNOWN_EVENTS))}. "
+            f"unknown event {event!r}. Known: {', '.join(sorted(INJECTABLE_EVENTS))}. "
             f"An unrecognised event propagates nothing, which looks identical to "
             f"nothing being affected."
         )
@@ -298,6 +300,8 @@ def backtest(path: pathlib.Path, verbose: bool = False, json_out: bool = False):
                 "recall": report.recall(),
                 "precision": report.precision(),
                 "exact": report.exact_rate(),
+                "exact_on_impacted": report.exact_on_impacted(),
+                "unverified_predictions": report.unverified,
                 "outcomes": {o.value: report.total(o) for o in Outcome},
                 "comparisons": [
                     {

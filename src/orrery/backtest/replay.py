@@ -151,10 +151,13 @@ def replay(incident: Incident) -> Comparison:
 
     cmp.scored = len(cmp.judgements)
     if not incident.assume_unlisted_up:
+        # Compared against the untouched world, not against UP: a snapshot may legitimately
+        # record something as already degraded, and reporting that as a prediction nobody
+        # checked would inflate the warning with entities the engine never touched.
         cmp.unverified_predictions = sorted(
             e.id
             for e in sim.entities()
-            if e.status is not Status.UP
+            if e.status is not world.entity(e.id).status
             and e.id != incident.trigger
             and e.id not in incident.observed
         )

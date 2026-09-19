@@ -220,25 +220,33 @@ def _reach_sizes(world: World) -> dict[str, int]:
             g.add_edge(eid, dep)
 
     condensed = nx.condensation(g)
+    mapping = condensed.graph["mapping"]
     members: dict[int, list[str]] = {}
-    for eid, comp in condensed.graph["mapping"].items():
+    for eid, comp in mapping.items():
         members.setdefault(comp, []).append(eid)
 
+    # Each component's bitset is up to one bit per entity, so holding all of them at once
+    # costs O(V^2) bits — 2 GB at 127k entities, measured. A component is only needed
+    # until every component that depends on it has folded it in, so they are counted and
+    # dropped. Peak memory becomes the width of the frontier rather than the whole graph.
+    remaining = {comp: condensed.in_degree(comp) for comp in condensed.nodes}
     bits: dict[int, int] = {}
+    sizes: dict[str, int] = {}
+
     for comp in reversed(list(nx.topological_sort(condensed))):
-        own = 0
+        acc = 0
         for eid in members[comp]:
-            own |= 1 << index[eid]
-        acc = own
+            acc |= 1 << index[eid]
         for succ in condensed.successors(comp):
             acc |= bits[succ]
+            remaining[succ] -= 1
+            if remaining[succ] == 0:
+                del bits[succ]
         bits[comp] = acc
+        for eid in members[comp]:
+            # An entity does not count itself, and a cycle counts its peers but not itself.
+            sizes[eid] = (acc & ~(1 << index[eid])).bit_count()
 
-    mapping = condensed.graph["mapping"]
-    sizes: dict[str, int] = {}
-    for eid in ids:
-        # An entity does not count itself, and a cycle counts its peers but not itself.
-        sizes[eid] = (bits[mapping[eid]] & ~(1 << index[eid])).bit_count()
     return sizes
 
 
@@ -254,6 +262,13 @@ def single_points_of_failure(
 
     One pass over the whole graph regardless of how many entities are ranked, so
     narrowing by `kinds` filters the output rather than saving work.
+
+    **Scale.** Measured on one laptop: 25k entities in 0.3 s and 130 MB, 127k in 5.5 s and
+    1.3 GB. The memory is the binding limit, not the time — reach is held as one bit per
+    entity per component, so it grows with the square of the estate. Bitsets are freed as
+    soon as everything that depends on them has folded them in, which roughly halves the
+    peak, but beyond a few hundred thousand entities this needs a different algorithm
+    rather than a smaller constant.
     """
     total = max(1, len(world) - 1)
     sizes = _reach_sizes(world)
