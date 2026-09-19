@@ -23,7 +23,7 @@ from orrery.schema import EntityKind, RelationKind
 
 from .graph import World
 
-_PLACEABLE = (EntityKind.SERVICE, EntityKind.DATABASE, EntityKind.NODE)
+_PLACEABLE = (EntityKind.SERVICE, EntityKind.DATABASE, EntityKind.NODE, EntityKind.VM)
 _ROOTS = (EntityKind.SITE, EntityKind.EXTERNAL, EntityKind.NETWORK_SEGMENT)
 
 
@@ -87,6 +87,57 @@ class MapAudit:
         return "\n".join(lines).rstrip()
 
 
+_MAX_FOUNDATION_DEPTH = 6
+
+
+def _shared_foundation(world: World, entity_id: str) -> tuple[str, int] | None:
+    """Do all of this entity's places to run stand on one thing further down?
+
+    Virtualization makes redundancy easy to fake without anyone meaning to. Three
+    Kubernetes nodes look like three places to fail; if they are three virtual machines on
+    one physical server, they are one. Nothing inside the cluster can see this — Kubernetes
+    does not know what it is standing on — so the map is the only place the question can
+    be asked at all.
+
+    Follows `RUNS_ON` and `HOSTED_IN` down from each place and reports the deepest thing
+    every one of them shares. Returns None for a single place, since that is the separate
+    and more obvious finding.
+    """
+    places = world.out_edges(entity_id, RelationKind.RUNS_ON)
+    if len(places) < 2:
+        return None
+
+    def foundations(start: str) -> list[str]:
+        """Everything under `start`, nearest first."""
+        out: list[str] = []
+        frontier = [start]
+        for _ in range(_MAX_FOUNDATION_DEPTH):
+            nxt: list[str] = []
+            for cur in frontier:
+                for kind in (RelationKind.RUNS_ON, RelationKind.HOSTED_IN):
+                    for below in world.out_edges(cur, kind):
+                        if below not in out:
+                            out.append(below)
+                            nxt.append(below)
+            if not nxt:
+                break
+            frontier = nxt
+        return out
+
+    chains = [foundations(p) for p in places]
+    if not all(chains):
+        return None
+    shared = set(chains[0]).intersection(*(set(c) for c in chains[1:]))
+    if not shared:
+        return None
+    # The deepest shared thing is the interesting one: a site everything shares is not
+    # news, a single physical server under three "redundant" nodes is.
+    deepest = min(shared, key=lambda s: min(c.index(s) for c in chains if s in c))
+    if world.entity(deepest).kind in (EntityKind.SITE, EntityKind.RACK):
+        return None  # everything in one site is a fact about the estate, not a defect
+    return deepest, len(places)
+
+
 def audit(world: World) -> MapAudit:
     """Look for the shapes that usually mean the map is wrong rather than the estate."""
     a = MapAudit(entities=len(world), relations=len(world.relations()))
@@ -130,6 +181,19 @@ def audit(world: World) -> MapAudit:
                         "redundancy on paper only",
                         e.id,
                         f"replicas={declared} but one place to run: losing it loses everything",
+                    )
+                )
+
+        if e.kind is EntityKind.SERVICE:
+            concentrated = _shared_foundation(world, e.id)
+            if concentrated:
+                where, places = concentrated
+                a.findings.append(
+                    Finding(
+                        "redundancy on one machine",
+                        e.id,
+                        f"{places} places to run, all of them on {where} — "
+                        f"losing it loses all of them",
                     )
                 )
 

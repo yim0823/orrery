@@ -6,6 +6,21 @@ The format is loosely [Keep a Changelog](https://keepachangelog.com/). Versions 
 semantic versioning, with the usual pre-1.0 caveat: minor versions may break things, and
 this section of the file will say so when they do.
 
+## [0.3.0] — 2026-09-19
+
+### Added
+
+- **`vm` is its own entity kind, and `orrery check` reports redundancy that shares one
+  machine.** Virtualization fakes redundancy without anyone meaning to: three Kubernetes
+  nodes look like three places to fail, and if they are three virtual machines on one
+  physical server they are one. Nothing inside the cluster can see this — Kubernetes does
+  not know what it is standing on — so the map is the only place the question can be
+  asked. Sharing a *site* is deliberately not reported; everything in one datacentre is a
+  fact about the estate, and a finding on every service teaches people to skip the report.
+- The documentation now names the **two layers** a map is made of — infrastructure (what
+  sits on what, from an inventory) and call (who talks to whom, in no inventory) — and
+  how to build the second without instrumenting every service.
+
 ## [0.2.0] — 2026-09-19
 
 Four adversarial reviewers were pointed at 0.1.0 and told to break it. They did. This

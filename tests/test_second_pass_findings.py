@@ -21,7 +21,7 @@ from orrery.resolve import Resolver
 from orrery.resolve.resolver import Alias, normalize
 from orrery.schema import Entity, EntityKind, Relation, RelationKind, Status
 from orrery.sim import Event, propagate
-from orrery.world import World, single_points_of_failure
+from orrery.world import World, audit, single_points_of_failure
 from orrery.world.audit import _reach_sizes
 from orrery.world.query import reach
 
@@ -444,3 +444,69 @@ def test_the_frontier_optimization_did_not_change_any_answer():
     w = _demo()
     for risk in single_points_of_failure(w, limit=50):
         assert risk.reach == len(reach(w, risk.entity_id))
+
+
+# ---- virtualization makes redundancy easy to fake ----
+
+
+VIRT = """
+entities:
+  - {id: site, kind: site, name: site}
+  - {id: phys-1, kind: host, name: phys1}
+  - {id: phys-2, kind: host, name: phys2}
+  - {id: vm-1, kind: vm, name: vm1}
+  - {id: vm-2, kind: vm, name: vm2}
+  - {id: vm-3, kind: vm, name: vm3}
+  - {id: n1, kind: node, name: n1}
+  - {id: n2, kind: node, name: n2}
+  - {id: n3, kind: node, name: n3}
+  - {id: svc, kind: service, name: svc}
+relations:
+  - {src: phys-1, dst: site, kind: HOSTED_IN}
+  - {src: phys-2, dst: site, kind: HOSTED_IN}
+  - {src: vm-1, dst: phys-1, kind: RUNS_ON}
+  - {src: vm-2, dst: phys-1, kind: RUNS_ON}
+  - {src: vm-3, dst: PHYS, kind: RUNS_ON}
+  - {src: n1, dst: vm-1, kind: RUNS_ON}
+  - {src: n2, dst: vm-2, kind: RUNS_ON}
+  - {src: n3, dst: vm-3, kind: RUNS_ON}
+  - {src: svc, dst: n1, kind: RUNS_ON}
+  - {src: svc, dst: n2, kind: RUNS_ON}
+  - {src: svc, dst: n3, kind: RUNS_ON}
+"""
+
+
+def test_three_nodes_on_one_physical_server_is_not_redundancy():
+    """A Kubernetes cluster cannot see what it is standing on. Three nodes that are three
+    virtual machines on one physical server look like three places to fail and are one,
+    and the map is the only place that question can be asked at all."""
+    w = _world_from(VIRT.replace("PHYS", "phys-1"))
+    flagged = {f.check for f in audit(w).findings if f.entity_id == "svc"}
+    assert "redundancy on one machine" in flagged
+
+
+def test_the_same_service_spread_across_two_machines_is_not_flagged():
+    w = _world_from(VIRT.replace("PHYS", "phys-2"))
+    flagged = {f.check for f in audit(w).findings if f.entity_id == "svc"}
+    assert "redundancy on one machine" not in flagged
+
+
+def test_sharing_a_site_is_not_reported_as_concentration():
+    """Everything in one datacentre is a fact about the estate, not a defect. Reporting it
+    would put a finding on every service and teach people to skip the report."""
+    w = _world_from(VIRT.replace("PHYS", "phys-2"))
+    assert all(
+        "site" not in f.detail for f in audit(w).findings if f.check == "redundancy on one machine"
+    )
+
+
+def test_losing_the_shared_machine_takes_the_whole_service():
+    w = _world_from(VIRT.replace("PHYS", "phys-1")).fork()
+    propagate(w, Event("phys-1", "down"))
+    assert w.entity("svc").status is Status.DOWN
+
+
+def test_losing_one_of_two_machines_only_degrades():
+    w = _world_from(VIRT.replace("PHYS", "phys-2")).fork()
+    propagate(w, Event("phys-2", "down"))
+    assert w.entity("svc").status is Status.DEGRADED

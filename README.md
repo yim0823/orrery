@@ -173,6 +173,30 @@ The two join on identity: a service in the call layer `RUNS_ON` a node in the
 infrastructure layer. Getting that join right is what entity resolution is for, and getting
 it wrong splits one thing into two and makes both answers wrong.
 
+### The layer people forget: what the cluster is standing on
+
+Virtualization makes redundancy easy to fake without anyone meaning to.
+
+```
+service → node → vm → host → rack → site
+                 └──── this one gets left out ────┘
+```
+
+A Kubernetes cluster does not know what it is standing on. Three nodes look like three
+places to fail; if they are three virtual machines on one physical server, they are one.
+Nothing inside the cluster can tell you that, which makes the map the only place the
+question can be asked.
+
+`vm` is a separate kind from `host` for exactly this reason, and `orrery check` reports it:
+
+```
+redundancy on one machine (1)
+  svc-api    3 places to run, all of them on host-phys-1 — losing it loses all of them
+```
+
+Sharing a *site* is not reported. Everything in one datacentre is a fact about the estate
+rather than a defect, and a finding on every service teaches people to skip the report.
+
 ### Where the call layer actually comes from
 
 Every inventory system knows where things run. None of them knows what calls what, because
@@ -352,7 +376,7 @@ you say anything precise about a dependency map at all.
 
 ## Project status
 
-Early alpha, `0.2.0`. Honest picture:
+Early alpha, `0.3.0`. Honest picture:
 
 **Licensing.** The first two commits were authored on employer equipment under an
 employer account. Code is copyright rather than patent, and work-for-hire rules are

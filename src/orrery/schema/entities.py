@@ -22,9 +22,16 @@ class EntityKind(StrEnum):
     case, and those are the ones below.
     """
 
+    # Virtualization is why `vm` is its own kind rather than another `host`. A cluster
+    # whose three nodes are three VMs on one physical server is not redundant, and
+    # nothing inside the cluster can see that: Kubernetes does not know what it is
+    # standing on. Collapsing the two into one kind makes that invisible, which is the
+    # single most common way a map says "spread across three nodes" about something that
+    # dies with one machine.
     SITE = "site"  # an IDC, a cloud region, an availability zone
     RACK = "rack"
-    HOST = "host"  # physical server or VM
+    HOST = "host"  # a physical server
+    VM = "vm"  # a virtual machine, on a host
     CLUSTER = "cluster"  # e.g. a Kubernetes cluster
     NODE = "node"  # a cluster member
     SERVICE = "service"  # a deployable workload
