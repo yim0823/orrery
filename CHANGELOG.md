@@ -6,6 +6,34 @@ The format is loosely [Keep a Changelog](https://keepachangelog.com/). Versions 
 semantic versioning, with the usual pre-1.0 caveat: minor versions may break things, and
 this section of the file will say so when they do.
 
+## [Unreleased]
+
+Three reviewers were pointed at four proposed features. Two of the four were rejected,
+one was cut down, one survived — and between them the reviewers found two defects that
+were not in the proposals at all. Both were the same shape: one code path doing the right
+thing and its twin quietly not.
+
+### Fixed
+
+- **A relation could never be confirmed by a second source.** `add_entity` merges
+  provenance, and its docstring says merging is the point, because that is how something
+  becomes cross-confirmed. `add_relation` replaced instead, so a second connector
+  describing an edge the first already described dropped the first one's record. Every
+  edge in a two-connector map was single-sourced however many connectors saw it. The
+  merge is now symmetric, and the relation is replaced rather than mutated because
+  relation objects are shared with the world a fork came from.
+- **Two sources disagreeing about `strength` are settled by argument, not arrival order.**
+  Hard wins, on the same reasoning the default rests on: calling a load-bearing
+  dependency optional hides an outage, calling an optional one load-bearing raises a
+  false alarm. The disagreement is recorded as a collision either way.
+- **`blast`, `spof` and `simulate` disagreed about a load balancer.** `blast lb-edge`
+  listed a backend that `simulate lb-edge` left untouched, and `spof` ranked the load
+  balancer for carrying a pool it does not carry. The rule that a load balancer's death
+  does not reach its members lived in `propagate` alone; the other two walked every
+  membership edge. 0.2.0 unified the edge list after exactly this happened with network
+  segments, and the membership rule then rebuilt the disagreement one level down. It is
+  now a predicate next to the edge list, and all three read it.
+
 ## [0.3.0] — 2026-09-19
 
 ### Added

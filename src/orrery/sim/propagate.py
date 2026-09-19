@@ -95,6 +95,26 @@ _CALL_EDGES = frozenset({RelationKind.DEPENDS_ON})
 _DOWNWARD_MEMBERSHIP = frozenset({EntityKind.CLUSTER})
 
 
+def consequence_crosses(edge: RelationKind, dst_kind: EntityKind) -> bool:
+    """Does the death of the thing at `dst` reach whatever points at it over `edge`?
+
+    True for every edge except membership of a kind that does not carry its own death
+    downward. It lives here, next to `_DEPENDENT_EDGES`, because the two are one rule in
+    two halves and splitting them is how this engine drifts: 0.2.0 unified the edge list
+    after `blast` said a network segment failure affected nothing while `simulate` said
+    it affected plenty, and the membership rule then rebuilt the same disagreement one
+    level down, where only `propagate` could see it. `blast lb-edge` listed a backend
+    that `simulate lb-edge` left untouched, and `spof` ranked the load balancer for
+    carrying it.
+
+    Two answers from one tool that contradict each other cost more trust than either one
+    being wrong.
+    """
+    if edge is RelationKind.MEMBER_OF:
+        return dst_kind in _DOWNWARD_MEMBERSHIP
+    return True
+
+
 @dataclass
 class Event:
     entity_id: str
@@ -232,7 +252,7 @@ def propagate(
 
         for emitted in eff.emit:
             for edge in _DEPENDENT_EDGES:
-                if edge is RelationKind.MEMBER_OF and ent.kind not in _DOWNWARD_MEMBERSHIP:
+                if not consequence_crosses(edge, ent.kind):
                     # Neither this kind's death nor its degradation reaches its members. A
                     # load balancer losing one backend is thinner; the other backends are
                     # not slower for it, and a first version that let the degrade through

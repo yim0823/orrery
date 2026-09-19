@@ -27,6 +27,17 @@ def _impact_edges():
     return _DEPENDENT_EDGES
 
 
+def _crosses():
+    """Not every edge in the list carries consequence from every kind — see the predicate.
+
+    Importing it rather than restating it is the point: the list and the predicate are one
+    rule, and the last time half of it lived here the two commands disagreed.
+    """
+    from orrery.sim.propagate import consequence_crosses
+
+    return consequence_crosses
+
+
 @dataclass
 class BlastRadius:
     root: str
@@ -73,8 +84,12 @@ def blast_radius(world: World, root: str, max_hops: int | None = None) -> BlastR
     while frontier and (max_hops is None or hop < max_hops):
         hop += 1
         nxt: list[str] = []
+        crosses = _crosses()
         for cur in frontier:
+            cur_kind = world.entity(cur).kind
             for kind in _impact_edges():
+                if not crosses(kind, cur_kind):
+                    continue
                 for dependent in world.in_edges(cur, kind):
                     if dependent == root or dependent in br.impacted:
                         continue

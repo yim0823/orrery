@@ -13,7 +13,14 @@ import yaml
 
 from orrery.connectors.base import Discovery
 from orrery.resolve import Resolver
-from orrery.schema import Entity, EntityKind, Relation, RelationKind, Status
+from orrery.schema import (
+    Entity,
+    EntityKind,
+    Relation,
+    RelationKind,
+    RelationStrength,
+    Status,
+)
 
 
 def _private(e: Entity) -> Entity:
@@ -89,10 +96,48 @@ class World:
             self.g.add_node(e.id, entity=e)
 
     def add_relation(self, r: Relation) -> None:
+        """Add, or merge into the edge already there.
+
+        Same rule as `add_entity`, and it was missing here: a second source describing an
+        edge the first source already described used to *replace* it, taking the first
+        source's provenance with it. So a relation could never be confirmed by more than
+        one source, however many saw it, while an entity could — an asymmetry nothing in
+        the model asks for and nobody would find until they asked why every edge in a
+        two-connector map was single-sourced.
+
+        Disagreement about `strength` is not settled by arrival order. Hard wins, on the
+        same argument the default rests on: calling a load-bearing dependency optional
+        hides an outage, and calling an optional one load-bearing raises a false alarm.
+        The disagreement is recorded either way.
+        """
         self._detach()
         for end in (r.src, r.dst):
             if end not in self.g:
                 raise KeyError(f"relation references unknown entity {end!r}")
+
+        prior_data = self.g.get_edge_data(r.src, r.dst, key=r.kind.value)
+        if prior_data is not None:
+            prior: Relation = prior_data["relation"]
+            strength = prior.strength
+            if prior.strength is not r.strength:
+                self.collisions.append(
+                    (
+                        f"{r.src} -{r.kind.value}-> {r.dst}",
+                        f"strength {prior.strength.value}",
+                        f"strength {r.strength.value}",
+                    )
+                )
+                strength = RelationStrength.HARD
+            # Replaced rather than mutated: relation objects are shared with the world
+            # this one was forked from, and `_detach` copies entities only.
+            r = prior.model_copy(
+                update={
+                    "strength": strength,
+                    "provenance": [*prior.provenance, *r.provenance],
+                    "attrs": {**prior.attrs, **r.attrs},
+                }
+            )
+
         self.g.add_edge(r.src, r.dst, key=r.kind.value, relation=r)
 
     def ingest(self, d: Discovery, resolver: Resolver | None = None) -> None:

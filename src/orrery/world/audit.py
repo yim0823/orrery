@@ -327,7 +327,7 @@ def _reach_sizes(world: World) -> dict[str, int]:
     string at a time. Same answer, and the cost stops being the thing that decides
     whether anyone runs the command.
     """
-    from orrery.sim.propagate import _DEPENDENT_EDGES
+    from orrery.sim.propagate import _DEPENDENT_EDGES, consequence_crosses
 
     ids = [e.id for e in world.entities()]
     index = {eid: i for i, eid in enumerate(ids)}
@@ -336,7 +336,13 @@ def _reach_sizes(world: World) -> dict[str, int]:
     g = nx.DiGraph()
     g.add_nodes_from(ids)
     for eid in ids:
-        for dep in world.dependents(eid, _DEPENDENT_EDGES):
+        # Membership that does not carry death downward is not reach: a load balancer
+        # dying leaves its pool running, and ranking it as if it took the pool with it
+        # put it above things that really do.
+        kinds = tuple(
+            k for k in _DEPENDENT_EDGES if consequence_crosses(k, world.entity(eid).kind)
+        )
+        for dep in world.dependents(eid, kinds):
             g.add_edge(eid, dep)
 
     condensed = nx.condensation(g)
