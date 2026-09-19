@@ -17,7 +17,7 @@ class Discovery:
     entities: list[Entity] = field(default_factory=list)
     relations: list[Relation] = field(default_factory=list)
 
-    def extend(self, other: "Discovery") -> None:
+    def extend(self, other: Discovery) -> None:
         self.entities.extend(other.entities)
         self.relations.extend(other.relations)
 

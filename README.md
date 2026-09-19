@@ -1,12 +1,27 @@
-# orrery
+> **Note** — This README is also available in [한국어](README.ko.md).
 
-**이 서버를 내리면 무엇이 같이 죽습니까?**
+<h1>orrery</h1>
 
-지금 이 질문에 답하는 방법은 대개 셋 중 하나입니다. 오래된 위키 문서를 찾아본다. 이 시스템을 잘 아는 선배에게 묻는다. 아니면 그냥 꺼보고 누가 소리치는지 기다린다.
+[![CI](https://github.com/yim0823/orrery/actions/workflows/ci.yml/badge.svg)](https://github.com/yim0823/orrery/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue.svg)](pyproject.toml)
+[![Status](https://img.shields.io/badge/status-early--alpha-orange.svg)](#project-status)
 
-orrery는 그 답을 계산합니다.
+**orrery computes what breaks when you touch your infrastructure.**
 
-```
+You model your hosts, clusters, services and databases as a graph. orrery answers
+two questions over it: what is in range of a failure, and what actually goes down
+once replicas and failover are taken into account.
+
+> ⚠️ **Early alpha.** The engine works and is tested, but its output has never been
+> checked against a real incident. Read [Project status](#project-status) before you
+> rely on it for anything.
+
+---
+
+## The question it answers
+
+```console
 $ orrery blast host-a1
 
 root: host-a1 (host)
@@ -16,15 +31,14 @@ root: host-a1 (host)
 impacted: 5 / 16
 ```
 
-서버 한 대를 골랐더니 세 단계 건너 결제 서비스까지 나옵니다. `host-a1`과 `svc-checkout`은 직접 연결된 적이 없습니다. 그 사이에 노드, 데이터베이스, 재고 서비스가 있고, 사람이 머릿속으로 세 단계를 따라가기는 어렵습니다.
+One host, and three hops later your checkout service is in the list. `host-a1` and
+`svc-checkout` are never directly connected — a node, a database and an inventory
+service sit in between. Tracing that by hand, at 3am, is where outages get longer.
 
----
+**But "in range" is not "down".** Whether something actually dies depends on
+replicas and failover, so there is a second command:
 
-## 두 번째 명령이 진짜입니다
-
-위 결과는 **구조적으로 닿는 범위**입니다. 다섯 개가 영향권에 있다는 것이지, 다섯 개가 다 죽는다는 뜻은 아닙니다. 실제로 무엇이 죽는지는 복제본이 몇 개인지, 이중화가 있는지에 달려 있습니다.
-
-```
+```console
 $ orrery simulate host-a1
 
   host-a1        -> down      passthrough
@@ -35,140 +49,180 @@ $ orrery simulate host-a1
   svc-checkout   -> down      hard dep down
 ```
 
-같은 서버인데 결과가 다릅니다.
+Same host, different answer:
 
-- `svc-web`은 **성능 저하**입니다. 복제본이 3개라 하나를 잃어도 서비스는 삽니다.
-- `svc-inventory`는 **죽습니다**. 복제본이 1개뿐입니다.
-- `svc-checkout`은 재고 서비스에 강하게 의존하므로 **연쇄로 죽습니다**.
+- `svc-web` **degrades** — three replicas, losing one node is survivable.
+- `svc-inventory` **dies** — one replica.
+- `svc-checkout` **dies with it** — hard dependency on inventory.
 
-새벽에 알아야 할 건 "다섯 개가 영향받는다"가 아니라 **"체크아웃이 멈춘다, 원인은 재고 서비스의 복제본이 하나뿐이기 때문"**입니다. 첫 번째 명령이 범위를 주고, 두 번째 명령이 결과를 줍니다.
+What you need on a page at 3am is not "5 impacted". It is *"checkout stops, because
+inventory runs a single replica."*
 
 ---
 
-## 5분 만에 직접 해보기
+## Quickstart
+
+Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 
 ```bash
-git clone <this repo> && cd orrery
+git clone https://github.com/yim0823/orrery && cd orrery
 uv sync
 uv run orrery ingest fixtures/demo-world.yaml
 uv run orrery blast site-a
 uv run orrery simulate db-stock
 ```
 
-`fixtures/demo-world.yaml`은 합성 데이터입니다. 서버 3대, 클러스터 1개, 서비스 4개, DB 2개로 된 작은 가상 회사이고 실제 어느 회사와도 무관합니다. 열어 보면 형식이 바로 보입니다.
+`fixtures/demo-world.yaml` is a small synthetic company — 3 hosts, a cluster, 4
+services, 2 databases. It resembles no real organization.
 
-```yaml
-entities:
-  - {id: host-a1, kind: host, name: "a1"}
-  - {id: svc-checkout, kind: service, name: "checkout", attrs: {replicas: 2}}
-  - {id: db-orders, kind: database, attrs: {engine: postgres, replica: true}}
+### Commands
 
-relations:
-  - {src: node-a1, dst: host-a1, kind: RUNS_ON}
-  - {src: svc-checkout, dst: db-orders, kind: DEPENDS_ON}
-```
-
-**개체**와 **관계** 둘뿐입니다. 관계는 다섯 종류입니다.
-
-| 관계 | 읽는 법 | 예 |
-|---|---|---|
-| `RUNS_ON` | A가 B 위에서 돈다 | 서비스가 노드 위에서 |
-| `HOSTED_IN` | A가 B 안에 놓여 있다 | 서버가 IDC 안에 |
-| `MEMBER_OF` | A가 B의 구성원이다 | 노드가 클러스터의 |
-| `DEPENDS_ON` | A가 B를 필요로 한다 | 서비스가 DB를 |
-| `CONNECTS_TO` | A가 B와 통신한다 | 네트워크 경로 |
-
-앞의 넷이 영향 전파 경로입니다. B가 죽으면 B를 가리키는 A들이 영향을 받습니다.
+| Command | What it does |
+|---|---|
+| `orrery ingest <file.yaml>` | Load a world and persist it under `.orrery/` |
+| `orrery blast <entity-id>` | Structural blast radius: what is in range, by hop |
+| `orrery simulate <entity-id>` | Behavioral result: what actually degrades or dies |
+| `orrery resolve <file.yaml>` | Propose entity-resolution candidates (never merges) |
 
 ---
 
-## 내 인프라를 넣으려면
+## Modeling your own infrastructure
 
-지도가 없으면 아무 답도 못 합니다. 그래서 데이터를 넣는 게 전부인데, 여기가 실제로 어려운 부분입니다.
+A world is **entities** and **relations**, nothing else.
 
-**커넥터를 직접 씁니다.** orrery는 커넥터 인터페이스만 정의하고, 실제 시스템에 붙는 코드는 각자의 리포에 둡니다. 회사마다 CMDB도 다르고 모니터링도 다르기 때문입니다.
+```yaml
+entities:
+  - {id: host-a1,      kind: host,     name: "a1"}
+  - {id: svc-checkout, kind: service,  name: "checkout", attrs: {replicas: 2}}
+  - {id: db-orders,    kind: database, name: "orders",   attrs: {replica: true}}
+
+relations:
+  - {src: svc-checkout, dst: db-orders, kind: DEPENDS_ON}
+  - {src: svc-checkout, dst: node-a2,   kind: RUNS_ON}
+```
+
+Five relation kinds. The arrow always points **from the dependent to the depended-upon**
+— reverse one and the blast radius is silently wrong.
+
+| Kind | Reads as |
+|---|---|
+| `RUNS_ON` | service runs on node; node runs on host |
+| `HOSTED_IN` | host is hosted in a site |
+| `MEMBER_OF` | node is a member of a cluster |
+| `DEPENDS_ON` | service depends on a database |
+| `CONNECTS_TO` | host talks to a network segment |
+
+The first four propagate impact. `CONNECTS_TO` does not — communication is symmetric
+and does not imply "if A dies, B dies".
+
+### Connectors
+
+orrery ships the **interface**, not implementations. Connectors to your CMDB,
+Kubernetes or monitoring live in your own repository, because no two organizations
+model these the same way.
 
 ```python
-from orrery.connectors.base import Connector, Discovery
-from orrery.schema import Entity, Relation, EntityKind, RelationKind
+from orrery.connectors.base import Discovery
+from orrery.schema import Entity, Relation, EntityKind, RelationKind, Provenance
 
 class MyCmdbConnector:
     name = "mycmdb"
 
     def discover(self) -> Discovery:
         d = Discovery()
-        for row in my_cmdb_api.list_servers():
+        for row in my_cmdb.list_servers():
             d.entities.append(Entity(
-                id=f"host-{row['id']}", kind=EntityKind.host, name=row["hostname"],
+                id=f"host-{row['id']}", kind=EntityKind.HOST, name=row["hostname"],
                 attrs={"ip": row["ip"], "env": row["env"]},
+                provenance=[Provenance(source="mycmdb", source_id=row["id"])],
             ))
             d.relations.append(Relation(
                 src=f"host-{row['id']}", dst=f"site-{row['idc']}",
                 kind=RelationKind.HOSTED_IN,
+                provenance=[Provenance(source="mycmdb", source_id=row["id"])],
             ))
         return d
 ```
 
-`discover()` 하나만 구현하면 됩니다. 여러 커넥터의 결과는 합쳐집니다.
+Implement `discover()` and nothing else. Results from multiple connectors merge.
 
-**이름이 시스템마다 다른 문제.** 같은 서비스를 CMDB는 `inventory`, 모니터링은 `inventory-prod`라고 부릅니다. `orrery resolve`가 후보를 찾아 주지만 **자동으로 합치지 않습니다.**
+### Entity resolution never merges automatically
 
-```
+Your CMDB calls it `inventory`; your monitoring calls it `inventory-prod`. Two names
+means two nodes in the graph, which means both blast radii are wrong.
+
+```console
 $ orrery resolve fixtures/demo-world.yaml
 candidate: svc-inventory (inventory) | svc-inventory-prod (inventory-prod)
 ```
 
-사람이 확인한 것만 합칩니다. 잘못 합친 지도는 없는 지도보다 나쁩니다. 틀린 답을 자신 있게 주기 때문입니다.
+orrery proposes; a human confirms. This is deliberate. A wrongly merged map is worse
+than no map — people distrust a missing map, but a wrong one answers confidently, and
+someone acts on that answer at 3am.
 
 ---
 
-## 이건 무엇이 아닙니까
+## What orrery is not
 
-- **모니터링이 아닙니다.** 지금 뭐가 아픈지는 기존 모니터링이 알려 줍니다. orrery는 *아직 일어나지 않은 일*을 계산합니다.
-- **서비스 맵이 아닙니다.** APM의 서비스 맵은 관측된 트래픽을 그립니다. 트래픽이 흐르지 않는 야간 배치, 장애 조치 경로, 아직 부하가 없는 신규 서비스는 안 보입니다. orrery는 선언된 구조를 씁니다.
-- **CMDB가 아닙니다.** 인벤토리는 기존 CMDB가 갖고 있습니다. orrery는 그 위에서 질문에 답하는 계산 계층입니다. 저장소를 하나 더 만들지 마세요. 정본이 둘이면 반드시 어긋납니다.
-- **두 번째 프로덕션이 아닙니다.** 모든 것을 실제로 돌리지 않습니다. 대부분은 객체와 행동 모델이고, 필요한 구역만 자세히 계산합니다.
-
----
-
-## 쓰게 되는 순간들
-
-**변경 전.** 이 서버를 리부팅하려는데 승인 화면에 영향 범위가 뜹니다. "5개 영향, 그중 체크아웃은 복제본 부족으로 다운."
-
-**장애 중.** 데이터베이스가 죽었습니다. 무엇부터 확인해야 하는지 홉 순서로 나옵니다.
-
-**온보딩.** 새로 온 사람이 위키 대신 `orrery blast`를 쳐 봅니다. 선배의 머릿속에만 있던 것이 명령 한 줄이 됩니다.
-
-**에이전트 앞.** AI 에이전트에게 운영을 맡기기 전에, 그 행동의 결과를 먼저 계산해 봅니다. 4축 루브릭(되돌림·관측·경계·사람통제)이 `orrery.scoring`에 있습니다.
+- **Not monitoring.** Your existing tools tell you what is broken now. orrery computes
+  what would break.
+- **Not an APM service map.** Those draw observed traffic, so they miss nightly batch
+  paths, failover routes, and services with no load yet. orrery uses declared structure.
+- **Not a CMDB.** Inventory lives in your CMDB. orrery is a compute layer on top.
+  Do not run a second source of truth; two will diverge, and then neither is trusted.
+- **Not a second production.** Nothing is actually executed. Entities are objects and
+  behavior models; only the region under examination is computed in detail.
 
 ---
 
-## 현재 상태
+## Documentation
 
-작동합니다. 테스트 15개 통과. 다만 초기 단계이고 정직하게 말하면 이렇습니다.
+- [Architecture](docs/ARCHITECTURE.md) — data model, propagation, extension points, tradeoffs
+- [Clean-room rules](CLEANROOM.md) — what may never enter this repository
+- [Contributing](CONTRIBUTING.md)
 
-| 되는 것 | 아직 안 되는 것 |
+---
+
+## Project status
+
+Early alpha, `0.0.1`. Honest picture:
+
+| Works | Not yet |
 |---|---|
-| 개체·관계 모델, YAML 적재 | 실제 시스템 커넥터 (직접 써야 함) |
-| 구조적 영향 범위 계산 | 시각화 (터미널 출력뿐) |
-| 행동 모델 기반 결과 전파 | 시점 비교·스냅샷 버저닝 |
-| 개체 해소 후보 제안 | 정확도 검증 (실제 장애 대조가 다음 과제) |
-| 4축 신뢰 루브릭 | 가중치·심각도 (지금은 죽었나 살았나뿐) |
+| Entity/relation model, YAML ingest | Connectors to real systems (you write them) |
+| Structural blast radius | Visualization — terminal output only |
+| Behavioral propagation with per-kind models | Snapshot diffing over time |
+| Entity-resolution candidates | Severity weighting — binary up/down only |
+| Four-axis agent trust rubric | Scenario runner (format defined, runner missing) |
 
-**가장 큰 미해결 문제는 정확도입니다.** 지도가 맞는지 어떻게 압니까. 다음 과제는 실제 장애 기록을 놓고 그때 이 계산이 맞췄을지 역채점하는 것입니다. 그 숫자가 나오기 전까지 이 도구의 답은 참고용입니다.
+**The biggest open problem is accuracy.** Nothing here has been validated against a
+real incident. The next milestone is backtesting: take N past incidents, and score
+whether this engine would have predicted the impact — true positives, misses, and
+false alarms. Until those numbers exist, treat the output as advisory, and say so to
+anyone who asks.
+
+There is one known correctness gap in propagation: when a degrade event and a down
+event reach the same entity, **arrival order decides the result.** Events need
+severity so the stronger one wins. See [Architecture §4](docs/ARCHITECTURE.md).
 
 ---
 
-## 이름
+## Contributing
 
-orrery는 태양계 기계 모형입니다. 모든 행성이 모형 위에 있고, 크랭크를 돌리면 모든 위치가 계산됩니다.
+Issues and pull requests are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md)
+first — in particular the clean-room rule, which is enforced by a commit hook.
 
-> 모든 서버가 지도에 있고, 행동하면 결과가 계산된다.
+```bash
+uv sync --all-extras --dev
+uv run pytest
+uv run ruff check .
+```
+
+## License
+
+[Apache-2.0](LICENSE).
 
 ---
 
-## 더 읽기
-
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md) — 8개 계층과 설계 결정
-- [CLEANROOM.md](CLEANROOM.md) — 이 리포에 들어가면 안 되는 것
-- 라이선스: Apache-2.0
+<sub>An orrery is a mechanical model of the solar system. Every planet is on the model,
+and when you turn the crank, every position is computed.</sub>

@@ -111,7 +111,9 @@ def score_trace(t: Trace) -> Score:
         else:
             human = 1
     else:
-        human = 3 if t.escalated_at is None else 3
+        # Escalation was not required, so full marks either way. Escalating anyway is not
+        # penalized here — unnecessary_escalations below is where that is accounted for.
+        human = 3
     human = _clamp(human - t.unnecessary_escalations)
 
     gated = t.root_cause_submitted is None and not t.safe_action_taken

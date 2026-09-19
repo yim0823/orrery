@@ -68,7 +68,7 @@ class World:
         self.entity(entity_id).status = status
 
     # ---- persistence: snapshot / fork ----
-    def fork(self) -> "World":
+    def fork(self) -> World:
         w = World()
         w.g = copy.deepcopy(self.g)
         return w
@@ -83,7 +83,7 @@ class World:
         pathlib.Path(path).write_text(yaml.safe_dump(self.to_dict(), allow_unicode=True), "utf-8")
 
     @classmethod
-    def load(cls, path: str | pathlib.Path) -> "World":
+    def load(cls, path: str | pathlib.Path) -> World:
         data = yaml.safe_load(pathlib.Path(path).read_text("utf-8"))
         w = cls()
         for e in data["entities"]:
