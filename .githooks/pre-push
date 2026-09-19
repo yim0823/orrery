@@ -1,7 +1,7 @@
 #!/bin/sh
 # 사내 식별자가 엔진 리포에 들어가는 것을 막는다.
 # denylist는 리포 바깥에 산다. 없으면 통과가 아니라 차단한다(fail closed).
-DENYLIST="${ORRERY_DENYLIST:-$HOME/감사할따름/orrery-internal/denylist.txt}"
+DENYLIST="${ORRERY_DENYLIST:-$HOME/감사할따름/orrery-사내자료/denylist.txt}"
 
 if [ ! -f "$DENYLIST" ]; then
   echo "🔴 커밋 차단: denylist를 찾을 수 없습니다 → $DENYLIST"
