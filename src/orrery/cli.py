@@ -10,7 +10,15 @@ from orrery.backtest import Incident, Outcome, format_report, run
 from orrery.connectors import StaticYamlConnector
 from orrery.resolve import Resolver
 from orrery.sim import Event, propagate
-from orrery.world import World, blast_radius, diff
+from orrery.world import (
+    EntityKind,
+    World,
+    audit,
+    blast_radius,
+    diff,
+    format_risks,
+    single_points_of_failure,
+)
 
 app = typer.Typer(
     help="orrery: every server is on the map, and when you act, the consequence is computed."
@@ -156,6 +164,42 @@ def diff_cmd(before: pathlib.Path, after: pathlib.Path, json_out: bool = False):
         _emit(d.to_dict())
         return
     typer.echo(d.summary())
+
+
+@app.command()
+def check(world: pathlib.Path | None = None, json_out: bool = False):
+    """Is this map any good?
+
+    Looks for the shapes that usually mean the map is wrong rather than the estate:
+    entities nothing connects to, services with nowhere recorded to run, redundancy that
+    exists on paper but not in the graph, and how much of the map rests on one source.
+    """
+    a = audit(_load(world))
+    if json_out:
+        _emit(a.to_dict())
+        return
+    typer.echo(a.summary())
+
+
+@app.command()
+def spof(
+    limit: int = 20,
+    kind: str | None = None,
+    world: pathlib.Path | None = None,
+    json_out: bool = False,
+):
+    """What is most dangerous? Entities ranked by how much goes with them.
+
+    Structural reach, not predicted damage — it deliberately ignores replicas, because
+    redundancy that is recorded but not real is exactly what this is for finding.
+    """
+    w = _load(world)
+    kinds = (EntityKind(kind),) if kind else None
+    risks = single_points_of_failure(w, limit=limit, kinds=kinds)
+    if json_out:
+        _emit({"total": len(w), "risks": [r.to_dict() for r in risks]})
+        return
+    typer.echo(format_risks(risks, len(w)))
 
 
 @app.command()

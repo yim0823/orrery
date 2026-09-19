@@ -26,6 +26,14 @@ answer was right, and has somewhere for your own data to enter.
   happens the instant this dies".
 - **Quorum.** A cluster with a `quorum` attribute dies when too few members survive, and
   takes the survivors with it.
+- **`orrery check`** — is this map any good? Entities nothing connects to, services with
+  nowhere recorded to run, redundancy that exists on paper but not in the graph, quorums
+  that cannot be reached, and how much of the map rests on a single source. On the demo
+  world it immediately finds an unresolved alias and a service claiming two replicas with
+  one place to run.
+- **`orrery spof`** — what is most dangerous? Entities ranked by how much goes with them.
+  Needs no incident history and no calibration, and deliberately ignores `replicas`:
+  redundancy recorded but not real is what the list exists to surface.
 - **Snapshot diffing** (`orrery diff`). What appeared, vanished, or was rewired between
   two ingests. Status is deliberately excluded: runtime state changes every minute and
   would bury the structural drift this exists to surface.

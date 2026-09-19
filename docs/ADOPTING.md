@@ -131,6 +131,35 @@ a decision someone makes rather than a collision nobody noticed.
 
 ---
 
+## Step 2.5 — look at the map before believing any of it
+
+The moment the first connector runs, two commands are worth more than any amount of
+staring at YAML.
+
+```bash
+orrery check    # is this map any good?
+orrery spof     # what is most dangerous?
+```
+
+`check` looks for the shapes that mean the map is wrong rather than the estate. The two
+that turn up most on a first ingest:
+
+- **isolated** — nothing connects to it. Almost always a join that failed quietly, not a
+  server nobody uses. Expect a lot of these while you are still resolving names.
+- **no recorded placement** — a service with nowhere to run, which means your placement
+  source is missing or not joined yet.
+
+It also reports how much of the map rests on one source. Early on that number is 100%,
+and it is worth watching it fall as connectors are added; an entity two systems agree on
+is an entity you can act on.
+
+`spof` ranks entities by how much goes with them. This is usually the first output that
+changes what a team does, because the top of the list is reliably something nobody had
+thought of. It ignores `replicas` on purpose — redundancy that is written down but not
+real is precisely what you are looking for.
+
+Neither is a verdict. Both are lists of things worth a person's attention.
+
 ## Step 3 — the same thing under three names
 
 Your CMDB calls it `inventory`. Monitoring calls it `inventory-prod`. The deploy pipeline

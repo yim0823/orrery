@@ -13,6 +13,8 @@ CHECKS = [
     (["blast", "host-a1"], "$ orrery blast host-a1"),
     (["simulate", "host-a1"], "$ orrery simulate host-a1"),
     (["backtest", "fixtures/incidents"], "$ orrery backtest fixtures/incidents"),
+    (["spof", "--limit", "4"], "$ orrery spof --limit 4"),
+    (["check"], "$ orrery check"),
 ]
 
 

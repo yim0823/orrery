@@ -83,7 +83,46 @@ services, 2 databases. It resembles no real organization.
 | `orrery blast <entity-id>` | Structural blast radius: what is in range, by hop |
 | `orrery simulate <entity-id>` | Behavioral result: what actually degrades or dies |
 | `orrery resolve <file.yaml>` | Propose entity-resolution candidates (never merges) |
+| `orrery check` | Is this map any good? Gaps and drift in the map itself |
+| `orrery spof` | What is most dangerous? Entities ranked by what goes with them |
+| `orrery diff <a> <b>` | What changed between two snapshots |
 | `orrery backtest <dir>` | Replay past incidents and score the engine against them |
+
+### Two questions you have on day one
+
+Before any incident history exists, and before anyone has calibrated anything:
+
+```console
+$ orrery spof --limit 4
+
+single points of failure, by what goes with them (18 entities)
+
+    1. site-a         9 (52.9%)  site
+    2. etcd           6 (35.3%)  cluster
+    3. k8s-main       6 (35.3%)  cluster
+    4. host-a1        5 (29.4%)  host
+```
+
+Structural reach, and deliberately blind to `replicas` — redundancy that is recorded but
+not real is exactly what this list exists to surface.
+
+```console
+$ orrery check
+
+map: 18 entities, 24 relations
+  sources: static_yaml (18)
+  0 entities confirmed by more than one source, 18 by exactly one
+
+redundancy on paper only (1)
+  svc-checkout                         replicas=2 but one place to run: losing it loses everything
+
+isolated (1)
+  svc-inventory-prod                   nothing connects to it — usually a join that failed, not a server nobody uses
+```
+
+`redundancy on paper only` is a service claiming two replicas with one recorded place to
+run. `isolated` is usually a join that failed quietly, not a server nobody uses. Neither
+is an error; both are worth someone looking at before the map is trusted.
 
 ---
 
