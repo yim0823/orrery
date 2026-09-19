@@ -28,7 +28,7 @@ root: host-a1 (host)
   hop 1: node-a1 (node), db-stock (database)
   hop 2: svc-web (service), svc-inventory (service)
   hop 3: svc-checkout (service)
-impacted: 5 / 16
+impacted: 5 / 17
 ```
 
 One host, and three hops later your checkout service is in the list. `host-a1` and
@@ -41,22 +41,22 @@ replicas and failover, so there is a second command:
 ```console
 $ orrery simulate host-a1
 
-  host-a1        -> down      passthrough
-  node-a1        -> down      passthrough
-  db-stock       -> down
-  svc-web        -> degraded  replicas=3
-  svc-inventory  -> down      replicas=1
-  svc-checkout   -> down      hard dep down
+  host-a1                  -> down      passthrough
+  node-a1                  -> down      passthrough
+  db-stock                 -> down      
+  svc-web                  -> degraded  replicas=3
+  svc-inventory            -> down      hard dep down
+  svc-checkout             -> down      hard dep down
 ```
 
 Same host, different answer:
 
-- `svc-web` **degrades** — three replicas, losing one node is survivable.
-- `svc-inventory` **dies** — one replica.
+- `svc-web` **degrades** — it still has another node to run on.
+- `svc-inventory` **dies** — the database it needs died with the host.
 - `svc-checkout` **dies with it** — hard dependency on inventory.
 
-What you need on a page at 3am is not "5 impacted". It is *"checkout stops, because
-inventory runs a single replica."*
+What you need on a page at 3am is not "5 impacted". It is *"checkout stops, because the
+stock database went with the host."*
 
 ---
 
@@ -213,26 +213,28 @@ Early alpha, `0.1.0`. Honest picture:
 | Entity/relation model, YAML ingest | Connectors to real systems (you write them) |
 | Structural blast radius | Visualization — terminal output only |
 | Behavioral propagation with per-kind models | Snapshot diffing over time |
-| Entity-resolution candidates | Event severity — arrival order can decide the result |
-| Four-axis agent trust rubric | Scenario runner (format defined, runner missing) |
-| Backtesting harness | A clock — soft dependencies are soft only for a while |
-| Hard and soft dependencies | |
+| Entity-resolution candidates | Capacity — see below |
+| Four-axis agent trust rubric | Materializing part of the world as real running systems |
+| Backtesting harness | Time that advances on its own, and more than one actor |
+| Hard and soft dependencies, quorum, tolerance windows | |
+| Snapshot diffing, JSON output, Neo4j source, scenario runner | |
 
 **Accuracy is the open problem, and there is now a way to measure it.**
 
 ```console
 $ orrery backtest fixtures/incidents
 
-backtest: 4 incident(s), 15 prediction(s) scored
-  49 entit(ies) skipped — the records say nothing about them
+backtest: 6 incident(s), 24 prediction(s) scored
+  78 entit(ies) skipped — the records say nothing about them
 
   recall    100%   of what broke, we predicted broken
   precision 100%   of what we predicted, actually broke
-  exact      93%   severity exactly right
+  exact     96%   severity exactly right
 
-  hit            11   predicted, right severity
-  correct up      3   agreed it was unaffected
+  hit            19   predicted, right severity
+  correct up      4   agreed it was unaffected
   understated     1   said degraded, was down
+  overstated      0   said down, was degraded
   false alarm     0   said broken, was fine
   MISS            0   said fine, was broken
 
@@ -248,24 +250,32 @@ and the engine grades itself. Two design choices matter:
 - **Severity counts.** Predicting "down" when something merely degraded is not a hit. It
   is `overstated`, and it is why the demo scores 100% recall but 75% exact.
 
-The harness earned its keep on its first run. It reported three `overstated` results,
-all one cause — orrery had no notion of a soft dependency, so a checkout service that
-queues and retries payments was modeled as dying with its payment provider. Soft
-dependencies exist now, and those three are hits.
+The harness earned its keep immediately. Its first run found four defects, and they were
+not small ones: arrival order could decide whether a service came out degraded or down,
+clusters ignored quorum entirely, services trusted a `replicas` attribute instead of
+counting the nodes that were actually left, and there was no notion of a soft dependency
+at all. All four are fixed, and each has a fixture keeping it fixed.
 
-The one `understated` result left is the next gap, kept deliberately in
-`fixtures/incidents/INC-0004.yaml`: **a soft dependency is soft only for a while.** When
-the payment provider stayed down for four hours, the retry queue filled and checkout
-stopped for real. `propagate()` has no clock, so it cannot say "soft for forty minutes,
-hard after that". A backtest containing only incidents the engine already handles
-measures nothing.
+The one `understated` result left is deliberate, in `fixtures/incidents/INC-0006.yaml`:
+**the engine knows whether somewhere is left to run, not whether the survivors can carry
+the load.** One node was lost at peak; structurally the storefront survived, and in
+reality the remaining node took the whole load and fell over. Answering that needs
+capacity modelling, which may not belong in a structural engine at all.
+
+A backtest containing only incidents the engine already handles measures nothing.
 
 Until you have run this against your own incidents, treat the output as advisory and say
 so to anyone who asks.
 
-There is one known correctness gap in propagation: when a degrade event and a down
-event reach the same entity, **arrival order decides the result.** Events need
-severity so the stronger one wins. See [Architecture §4](docs/ARCHITECTURE.md).
+Performance, measured rather than asserted — one laptop, `scripts/bench.py`:
+
+| World | blast (whole site) | simulate | fork |
+|---|---|---|---|
+| 25,508 entities | 53 ms | 164 ms | below timer resolution |
+| 127,508 entities | 307 ms | 1.1 s | below timer resolution |
+
+The large numbers are the pathological case: a whole site failing and reaching a third of
+the estate. A single host or database is an order of magnitude cheaper.
 
 ---
 

@@ -55,3 +55,6 @@ jobs:
           uv run orrery blast host-a1
           uv run orrery simulate host-a1
           uv run orrery backtest fixtures/incidents
+
+      - name: README examples match the tool
+        run: uv run python scripts/check_readme.py
