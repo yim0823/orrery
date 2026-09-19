@@ -549,14 +549,6 @@ def test_two_machines_in_two_racks_is_not_flagged():
     assert not {"redundancy in one rack", "redundancy on one machine"} & flagged
 
 
-def test_a_shared_machine_is_reported_instead_of_the_rack_it_stands_in():
-    """Both are true at once; only the nearer one is worth saying. Reporting the rack as
-    well would put two findings on one defect and make the report longer than it is
-    useful."""
-    w = _world_from(VIRT.replace("PHYS", "phys-1"))
-    flagged = {f.check for f in audit(w).findings if f.entity_id == "svc"}
-    assert "redundancy on one machine" in flagged
-    assert "redundancy in one rack" not in flagged
 
 
 def test_the_shipped_demo_world_actually_contains_the_trap_the_readme_describes():
@@ -567,3 +559,212 @@ def test_the_shipped_demo_world_actually_contains_the_trap_the_readme_describes(
     found = [f for f in audit(w).findings if f.check == "redundancy on one machine"]
     assert [f.entity_id for f in found] == ["svc-search"]
     assert "host-a3" in found[0].detail
+
+
+# ---- what the second adversarial pass found in the first pass's rack work ----
+
+
+DEEP = """
+entities:
+  - {id: aa-site, kind: site, name: site}
+  - {id: zz-rack-1, kind: rack, name: rack1}
+  - {id: zz-rack-2, kind: rack, name: rack2}
+  - {id: host-1, kind: host, name: h1}
+  - {id: host-2, kind: host, name: h2}
+  - {id: vm-1, kind: vm, name: vm1}
+  - {id: vm-2, kind: vm, name: vm2}
+  - {id: n1, kind: node, name: n1}
+  - {id: n2, kind: node, name: n2}
+  - {id: svc, kind: service, name: svc}
+relations:
+  - {src: zz-rack-1, dst: aa-site, kind: HOSTED_IN}
+  - {src: zz-rack-2, dst: aa-site, kind: HOSTED_IN}
+  - {src: host-1, dst: zz-rack-1, kind: HOSTED_IN}
+  - {src: host-2, dst: RACK, kind: HOSTED_IN}
+  - {src: vm-1, dst: host-1, kind: RUNS_ON}
+  - {src: vm-2, dst: host-2, kind: RUNS_ON}
+  - {src: n1, dst: vm-1, kind: RUNS_ON}
+  - {src: n2, dst: vm-2, kind: RUNS_ON}
+  - {src: svc, dst: n1, kind: RUNS_ON}
+  - {src: svc, dst: n2, kind: RUNS_ON}
+"""
+
+
+def test_the_shared_thing_is_found_four_levels_below_the_places():
+    """node -> vm -> host -> rack is the chain the documentation is about, and the rack is
+    three hops below a place. A walk that stops shallower finds nothing and says nothing,
+    which is the worst of the three possible answers.
+
+    The names are deliberately hostile: the rack sorts *after* the site, so a version that
+    picks alphabetically rather than by nearness returns the site and reports nothing."""
+    w = _world_from(DEEP.replace("RACK", "zz-rack-1"))
+    found = [f for f in audit(w).findings if f.entity_id == "svc"]
+    assert [f.check for f in found] == ["redundancy in one rack"]
+    assert "zz-rack-1" in found[0].detail
+    assert "one power feed" in found[0].detail
+
+
+def test_two_hypervisors_in_two_racks_is_real_redundancy():
+    w = _world_from(DEEP.replace("RACK", "zz-rack-2"))
+    assert [f for f in audit(w).findings if f.entity_id == "svc"] == []
+
+
+ONE_RACK = """
+entities:
+  - {id: site, kind: site, name: site}
+  - {id: rack-1, kind: rack, name: rack1}
+  - {id: host-1, kind: host, name: h1}
+  - {id: host-2, kind: host, name: h2}
+  - {id: svc-a, kind: service, name: a}
+  - {id: svc-b, kind: service, name: b}
+relations:
+  - {src: rack-1, dst: site, kind: HOSTED_IN}
+  - {src: host-1, dst: rack-1, kind: HOSTED_IN}
+  - {src: host-2, dst: rack-1, kind: HOSTED_IN}
+  - {src: svc-a, dst: host-1, kind: RUNS_ON}
+  - {src: svc-a, dst: host-2, kind: RUNS_ON}
+  - {src: svc-b, dst: host-1, kind: RUNS_ON}
+  - {src: svc-b, dst: host-2, kind: RUNS_ON}
+"""
+
+
+def test_an_estate_with_one_rack_is_not_told_that_everything_is_in_it():
+    """The same reasoning that keeps `site` quiet. Where there is one rack, "all in rack-1"
+    is true of every service in the company: a fact about the estate, not a defect, and
+    one that arrives at the top of the report because the report sorts by count."""
+    a = audit(_world_from(ONE_RACK))
+    assert [f for f in a.findings if f.check == "redundancy in one rack"] == []
+
+
+def test_a_second_rack_makes_the_first_one_worth_mentioning():
+    w = _world_from(
+        ONE_RACK.replace(
+            "  - {id: host-1, kind: host, name: h1}",
+            "  - {id: rack-2, kind: rack, name: rack2}\n  - {id: host-1, kind: host, name: h1}",
+        ).replace(
+            "  - {src: host-1, dst: rack-1, kind: HOSTED_IN}",
+            "  - {src: rack-2, dst: site, kind: HOSTED_IN}\n"
+            "  - {src: host-1, dst: rack-1, kind: HOSTED_IN}",
+        )
+    )
+    flagged = {f.entity_id for f in audit(w).findings if f.check == "redundancy in one rack"}
+    assert flagged == {"svc-a", "svc-b"}
+
+
+OVERLAP = """
+entities:
+  - {id: site, kind: site, name: site}
+  - {id: rack-1, kind: rack, name: rack1}
+  - {id: host-1, kind: host, name: h1}
+  - {id: n1, kind: node, name: n1}
+  - {id: svc, kind: service, name: svc}
+relations:
+  - {src: rack-1, dst: site, kind: HOSTED_IN}
+  - {src: host-1, dst: rack-1, kind: HOSTED_IN}
+  - {src: n1, dst: host-1, kind: RUNS_ON}
+  - {src: svc, dst: n1, kind: RUNS_ON}
+  - {src: svc, dst: host-1, kind: RUNS_ON}
+"""
+
+
+def test_a_place_that_is_the_foundation_of_the_other_place_is_the_finding():
+    """One pod on a node and one instance on the host that node stands on — two connectors
+    describing the same box at two granularities. Both places are host-1, so the answer is
+    host-1. A walk that looks only *below* each place can never see that, and an earlier
+    version reported this as a shared rack: the right alarm with the wrong fix attached."""
+    w = _world_from(OVERLAP)
+    found = [f for f in audit(w).findings if f.entity_id == "svc"]
+    assert [f.check for f in found] == ["redundancy on one machine"]
+    assert "host-1" in found[0].detail
+
+
+ALTERNATIVES = """
+entities:
+  - {id: site, kind: site, name: site}
+  - {id: host-1, kind: host, name: h1}
+  - {id: host-2, kind: host, name: h2}
+  - {id: n1, kind: node, name: n1}
+  - {id: n2, kind: node, name: n2}
+  - {id: svc, kind: service, name: svc}
+relations:
+  - {src: host-1, dst: site, kind: HOSTED_IN}
+  - {src: host-2, dst: site, kind: HOSTED_IN}
+  - {src: n1, dst: host-1, kind: RUNS_ON}
+  - {src: n1, dst: host-2, kind: RUNS_ON}
+  - {src: n2, dst: host-2, kind: RUNS_ON}
+  - {src: svc, dst: n1, kind: RUNS_ON}
+  - {src: svc, dst: n2, kind: RUNS_ON}
+"""
+
+
+def test_the_audit_never_claims_something_the_simulator_will_deny():
+    """`n1` is recorded on two hosts — a live migration caught mid-inventory, or two
+    connectors disagreeing. Losing `host-2` leaves `n1` somewhere to run, and `propagate`
+    says so. An audit that unions everything under each place instead of intersecting the
+    alternatives announces "losing it loses all of them" about the same host, and then the
+    simulator shipped beside it contradicts the finding."""
+    w = _world_from(ALTERNATIVES)
+    assert [f for f in audit(w).findings if f.entity_id == "svc"] == []
+
+    after = w.fork()
+    propagate(after, Event("host-2", "down"))
+    assert after.entity("svc").status is not Status.DOWN
+
+
+DB_ON_ONE_BOX = """
+entities:
+  - {id: site, kind: site, name: site}
+  - {id: host-1, kind: host, name: h1}
+  - {id: vm-1, kind: vm, name: vm1}
+  - {id: vm-2, kind: vm, name: vm2}
+  - {id: db, kind: database, name: orders, attrs: {engine: postgres}}
+relations:
+  - {src: host-1, dst: site, kind: HOSTED_IN}
+  - {src: vm-1, dst: host-1, kind: RUNS_ON}
+  - {src: vm-2, dst: host-1, kind: RUNS_ON}
+  - {src: db, dst: vm-1, kind: RUNS_ON}
+  - {src: db, dst: vm-2, kind: RUNS_ON}
+"""
+
+
+def test_a_primary_and_its_replica_on_one_hypervisor_is_the_oldest_version_of_this():
+    """The check asked only about services for a release, which left out the case people
+    have been getting wrong for longer than Kubernetes has existed."""
+    w = _world_from(DB_ON_ONE_BOX)
+    found = [f for f in audit(w).findings if f.entity_id == "db"]
+    assert [f.check for f in found] == ["redundancy on one machine"]
+    assert "host-1" in found[0].detail
+
+
+def test_a_cycle_in_the_map_does_not_hang_the_audit():
+    """`check` exists to report broken maps. Hanging on one is not a report."""
+    w = _world_from(
+        """
+entities:
+  - {id: host-1, kind: host, name: h1}
+  - {id: host-2, kind: host, name: h2}
+  - {id: svc, kind: service, name: svc}
+relations:
+  - {src: host-1, dst: host-2, kind: HOSTED_IN}
+  - {src: host-2, dst: host-1, kind: HOSTED_IN}
+  - {src: svc, dst: host-1, kind: RUNS_ON}
+  - {src: svc, dst: host-2, kind: RUNS_ON}
+"""
+    )
+    audit(w)  # must return at all
+
+
+def test_the_reason_column_never_contradicts_the_status_beside_it():
+    """`svc-checkout -> down   dep degraded` shipped for a release. The status was being
+    carried over correctly when a weaker effect arrived by a shorter path, and the note
+    was not, so the row said "it died" and "its dependency got slower" at once. The reason
+    is the column that makes the answer a decision rather than a number; it is the last
+    one that may be wrong."""
+    w = _demo().fork()
+    effects = propagate(w, Event("rack-a1", "down"))
+    by_id = {e.entity_id: e for e in effects}
+    assert by_id["svc-checkout"].status is Status.DOWN
+    assert by_id["svc-checkout"].note == "hard dep down"
+    for eff in effects:
+        if eff.status is Status.DOWN:
+            assert "degraded" not in eff.note, (eff.entity_id, eff.note)

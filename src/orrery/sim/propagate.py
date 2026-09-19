@@ -211,6 +211,13 @@ def propagate(
                 # report what is true rather than what this model proposed — a status
                 # may never improve, and the returned effects must say so too.
                 eff = replace(eff, status=ent.status)
+                if ent.id in effects:
+                    # Keep the reason that goes with the status already recorded. Only the
+                    # status was being carried over, so a degradation arriving by a shorter
+                    # path overwrote the note and printed `down  dep degraded` — a row
+                    # whose two halves contradict each other. The shorter path still
+                    # matters for what this emits onward; it just did not cause this.
+                    eff = replace(eff, note=effects[ent.id].note)
         elif not eff.emit:
             # Nothing happened here. Recording it would put a row with no status in the
             # output, which reads as "we looked and are not saying", and this tool has

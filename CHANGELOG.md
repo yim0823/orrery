@@ -36,6 +36,38 @@ this section of the file will say so when they do.
 
 ### Fixed
 
+- **The reason column could contradict the status beside it.** `orrery simulate rack-a1`
+  printed `svc-checkout -> down   dep degraded`: it died, and its dependency got slower.
+  When a weaker effect arrived by a shorter path the status was correctly carried over
+  from the stronger one and the note was not, so the two halves of the row came from
+  different events — and which half you got depended on traversal order. The reason is
+  the column that turns an answer into a decision; it is the last one that may be wrong.
+- **The concentration check unioned alternatives that the simulator treats as
+  redundancy.** Walking down from each place collected *everything* below it, so a node
+  recorded on two hypervisors — a live migration caught mid-inventory, or two connectors
+  disagreeing — produced "2 places to run, all of them on h2, losing it loses all of
+  them" while `propagate(h2 down)` said `degraded`. The audit now intersects `RUNS_ON`
+  alternatives and unions `HOSTED_IN` containers, because those two edges mean opposite
+  things. An audit that the simulator beside it denies is worse than no audit.
+- **A place that is the foundation of another place was invisible.** One pod on a node
+  and one instance on the host that node stands on are two places on one machine. The
+  walk looked only *below* each place, never at the place itself, so it reported this as
+  a shared *rack*: the right alarm with the wrong fix attached. A place is now its own
+  carrier.
+- **`redundancy in one rack` is silent in an estate with one rack.** The same reasoning
+  that keeps `site` quiet, which the first version of the finding failed to apply to
+  itself: where there is one rack, "all in rack-1" is true of every service in the
+  company. A twelve-service, one-rack estate produced twelve findings, at the top of the
+  report, since the report sorts by count.
+- **Databases are checked for concentration too.** The check asked only about services,
+  leaving out a primary and its replica on one hypervisor — the version of this defect
+  that predates Kubernetes.
+- **The nearest shared foundation is chosen structurally, not by hop count.** Two places
+  can reach the same carrier by paths of different lengths, and then hop counting answers
+  differently depending on which place you measure from; ties were broken by the hash
+  seed, so the same map named different hosts in different processes. The nearest carrier
+  is now the one that itself stands on the most, and the depth cap — which silently
+  returned "nothing found" past six hops — is gone.
 - **`README.ko.md` documented behavior the engine does not have.** Its `simulate` output
   showed `replicas=3` and `replicas=1` as reasons and the prose explained the result by
   replica counts. The engine counts surviving `RUNS_ON` edges and has not read a replica

@@ -47,7 +47,7 @@ $ orrery simulate host-a1
   host-a1                  -> down      passthrough
   node-a1                  -> down      passthrough
   db-stock                 -> down      
-  svc-web                  -> degraded  dep degraded
+  svc-web                  -> degraded  lost one of its places to run
   svc-inventory            -> down      hard dep down
   svc-checkout             -> down      hard dep down
 ```

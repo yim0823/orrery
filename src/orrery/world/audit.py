@@ -87,7 +87,46 @@ class MapAudit:
         return "\n".join(lines).rstrip()
 
 
-_MAX_FOUNDATION_DEPTH = 6
+def _carriers(
+    world: World,
+    start: str,
+    memo: dict[str, frozenset[str]],
+    visiting: set[str],
+) -> frozenset[str]:
+    """Everything below `start` whose loss takes `start` down with it.
+
+    The two edge kinds mean opposite things here and an earlier version of this walk
+    unioned both, which made the audit contradict the simulator that ships beside it.
+
+    Several `RUNS_ON` targets are **alternatives**: `propagate` only calls a thing down
+    when the last of its places is gone, so a killer has to be under *every* place — they
+    intersect. `HOSTED_IN` is not an alternative. A host sits in one rack; if the map
+    claims two, losing either is bad news either way — so those union.
+    """
+    if start in memo:
+        return memo[start]
+    if start in visiting:
+        # A cycle in the map — `HOSTED_IN` pointing both ways between two hosts, say.
+        # Say nothing rather than loop; `check` reports map defects, it should not hang on
+        # one. The cycle itself is visible as an odd shape in `spof`.
+        return frozenset()
+    visiting.add(start)
+
+    places = world.out_edges(start, RelationKind.RUNS_ON)
+    shared: frozenset[str] | None = None
+    for place in places:
+        below = frozenset({place}) | _carriers(world, place, memo, visiting)
+        shared = below if shared is None else (shared & below)
+    result = shared or frozenset()
+    for container in world.out_edges(start, RelationKind.HOSTED_IN):
+        result = result | {container} | _carriers(world, container, memo, visiting)
+
+    visiting.discard(start)
+    if not visiting:
+        # Only cache a result computed outside any cycle-breaking. A truncated answer that
+        # got memoized would leak out of the cycle it came from and poison the rest.
+        memo[start] = result
+    return result
 
 
 def _shared_foundation(world: World, entity_id: str) -> tuple[str, int, EntityKind] | None:
@@ -99,53 +138,48 @@ def _shared_foundation(world: World, entity_id: str) -> tuple[str, int, EntityKi
     does not know what it is standing on — so the map is the only place the question can
     be asked at all.
 
-    Follows `RUNS_ON` and `HOSTED_IN` down from each place and reports the deepest thing
-    every one of them shares, along with its kind, since a shared physical server and a
-    shared rack are the same defect with different fixes. Returns None for a single place,
-    since that is the separate and more obvious finding.
+    Returns the **nearest** thing whose loss would take every place with it, and its kind,
+    since a shared physical server and a shared rack are the same defect with different
+    fixes. A place counts as its own carrier: one pod on a node and one instance on the
+    host that node stands on are two places on one machine, and an earlier version of this
+    reported that as a shared *rack*, which named the wrong fix.
+
+    Returns None for a single place, since that is the separate and more obvious finding.
     """
     places = world.out_edges(entity_id, RelationKind.RUNS_ON)
     if len(places) < 2:
         return None
 
-    def foundations(start: str) -> list[str]:
-        """Everything under `start`, nearest first."""
-        out: list[str] = []
-        frontier = [start]
-        for _ in range(_MAX_FOUNDATION_DEPTH):
-            nxt: list[str] = []
-            for cur in frontier:
-                for kind in (RelationKind.RUNS_ON, RelationKind.HOSTED_IN):
-                    for below in world.out_edges(cur, kind):
-                        if below not in out:
-                            out.append(below)
-                            nxt.append(below)
-            if not nxt:
-                break
-            frontier = nxt
-        return out
-
-    chains = [foundations(p) for p in places]
-    if not all(chains):
-        return None
-    shared = set(chains[0]).intersection(*(set(c) for c in chains[1:]))
+    memo: dict[str, frozenset[str]] = {}
+    shared: frozenset[str] | None = None
+    for place in places:
+        carries = frozenset({place}) | _carriers(world, place, memo, set())
+        shared = carries if shared is None else (shared & carries)
+    shared = (shared or frozenset()) - {entity_id}
     if not shared:
         return None
-    # The deepest shared thing is the interesting one: a site everything shares is not
-    # news, a single physical server under three "redundant" nodes is.
-    deepest = min(shared, key=lambda s: min(c.index(s) for c in chains if s in c))
-    kind = world.entity(deepest).kind
+
+    # Only the nearest shared thing is worth saying: a service on one hypervisor is
+    # necessarily also in one rack and one site, and reporting all three turns one defect
+    # into three findings. "Nearest" is asked structurally rather than by counting hops —
+    # the shared carriers form a chain, and the nearest one is the one that itself still
+    # stands on the most. Hop counts answer this too until two places reach the same
+    # carrier by paths of different lengths, and then they answer it differently depending
+    # on which place you measure from. `sorted` makes the tie-break the name rather than
+    # the hash seed.
+    nearest = max(sorted(shared), key=lambda s: len(_carriers(world, s, memo, set())))
+    kind = world.entity(nearest).kind
     if kind is EntityKind.SITE:
         # Everything in one datacentre is a fact about the estate rather than a defect, and
-        # a finding on every service teaches people to skip the report. A rack is not that:
-        # it is one power feed and one top-of-rack switch, and it can be moved off.
+        # a finding on every service teaches people to skip the report.
         return None
-    return deepest, len(places), kind
+    return nearest, len(places), kind
 
 
 def audit(world: World) -> MapAudit:
     """Look for the shapes that usually mean the map is wrong rather than the estate."""
     a = MapAudit(entities=len(world), relations=len(world.relations()))
+    racks = sum(1 for e in world.entities() if e.kind is EntityKind.RACK)
 
     for e in world.entities():
         srcs = {p.source for p in e.provenance}
@@ -189,19 +223,26 @@ def audit(world: World) -> MapAudit:
                     )
                 )
 
-        if e.kind is EntityKind.SERVICE:
+        # Databases too, not services only. A primary and a replica on one hypervisor is
+        # the oldest version of this defect and was silent here for a release.
+        if e.kind in (EntityKind.SERVICE, EntityKind.DATABASE):
             concentrated = _shared_foundation(world, e.id)
             if concentrated:
                 where, places, kind = concentrated
                 if kind is EntityKind.RACK:
-                    a.findings.append(
-                        Finding(
-                            "redundancy in one rack",
-                            e.id,
-                            f"{places} places to run on different machines, all in {where} — "
-                            f"one power feed, one top-of-rack switch",
+                    # Only when there is somewhere else to be. In an estate with one rack,
+                    # "all in rack-1" is true of everything and is the same fact-about-the-
+                    # estate that keeps `site` quiet — and it lands at the top of the
+                    # report, because the report sorts by count.
+                    if racks > 1:
+                        a.findings.append(
+                            Finding(
+                                "redundancy in one rack",
+                                e.id,
+                                f"{places} places to run on different machines, all in "
+                                f"{where} — one power feed, one top-of-rack switch",
+                            )
                         )
-                    )
                 else:
                     a.findings.append(
                         Finding(

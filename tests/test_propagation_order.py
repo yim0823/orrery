@@ -90,6 +90,18 @@ def test_result_reports_the_final_state_not_the_first_guess():
     assert target.status is Status.DOWN
 
 
+@pytest.mark.parametrize("order", ["soft-first", "hard-first"])
+def test_the_reason_agrees_with_the_status_whichever_path_arrived_first(order: str):
+    """The status is order-independent because it may only worsen. The reason beside it
+    has to travel with it: carrying the status over from a stronger effect while taking
+    the note from a weaker one printed `down  dep degraded`, a row whose two halves deny
+    each other, and which half you got depended on traversal order."""
+    effects = propagate(_converging_world(order), Event("site", "down"))
+    target = next(e for e in effects if e.entity_id == "svc-target")
+    assert target.status is Status.DOWN
+    assert "degraded" not in target.note
+
+
 # ---- time: a soft dependency is soft only for a while ----
 
 
