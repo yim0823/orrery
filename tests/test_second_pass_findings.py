@@ -510,3 +510,60 @@ def test_losing_one_of_two_machines_only_degrades():
     w = _world_from(VIRT.replace("PHYS", "phys-2")).fork()
     propagate(w, Event("phys-2", "down"))
     assert w.entity("svc").status is Status.DEGRADED
+
+
+# ---- a rack is a shared foundation too, and a different fix ----
+
+
+RACK = """
+entities:
+  - {id: site, kind: site, name: site}
+  - {id: rack-1, kind: rack, name: rack1}
+  - {id: rack-2, kind: rack, name: rack2}
+  - {id: phys-1, kind: host, name: phys1}
+  - {id: phys-2, kind: host, name: phys2}
+  - {id: svc, kind: service, name: svc}
+relations:
+  - {src: rack-1, dst: site, kind: HOSTED_IN}
+  - {src: rack-2, dst: site, kind: HOSTED_IN}
+  - {src: phys-1, dst: rack-1, kind: HOSTED_IN}
+  - {src: phys-2, dst: RACK, kind: HOSTED_IN}
+  - {src: svc, dst: phys-1, kind: RUNS_ON}
+  - {src: svc, dst: phys-2, kind: RUNS_ON}
+"""
+
+
+def test_two_machines_in_one_rack_is_reported_as_its_own_finding():
+    """A rack is one power feed and one top-of-rack switch. Two hosts in it are two hosts
+    and one failure domain, which is the same defect as the shared hypervisor with a
+    different fix — move a machine, rather than move a virtual machine."""
+    w = _world_from(RACK.replace("RACK", "rack-1"))
+    flagged = {f.check for f in audit(w).findings if f.entity_id == "svc"}
+    assert "redundancy in one rack" in flagged
+    assert "redundancy on one machine" not in flagged  # the machines really are two
+
+
+def test_two_machines_in_two_racks_is_not_flagged():
+    w = _world_from(RACK.replace("RACK", "rack-2"))
+    flagged = {f.check for f in audit(w).findings if f.entity_id == "svc"}
+    assert not {"redundancy in one rack", "redundancy on one machine"} & flagged
+
+
+def test_a_shared_machine_is_reported_instead_of_the_rack_it_stands_in():
+    """Both are true at once; only the nearer one is worth saying. Reporting the rack as
+    well would put two findings on one defect and make the report longer than it is
+    useful."""
+    w = _world_from(VIRT.replace("PHYS", "phys-1"))
+    flagged = {f.check for f in audit(w).findings if f.entity_id == "svc"}
+    assert "redundancy on one machine" in flagged
+    assert "redundancy in one rack" not in flagged
+
+
+def test_the_shipped_demo_world_actually_contains_the_trap_the_readme_describes():
+    """The README's headline claim about the virtualization layer is only worth making if
+    `orrery check` on the fixture a reader ingests in the quickstart shows it. Two nodes,
+    one hypervisor, and the cluster cannot see it."""
+    w = _demo()
+    found = [f for f in audit(w).findings if f.check == "redundancy on one machine"]
+    assert [f.entity_id for f in found] == ["svc-search"]
+    assert "host-a3" in found[0].detail

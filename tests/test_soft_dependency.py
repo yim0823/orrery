@@ -26,6 +26,7 @@ def test_strength_parses_from_yaml():
     assert {(r.src, r.dst) for r in soft} == {
         ("svc-checkout", "ext-payments"),
         ("svc-web", "svc-checkout"),
+        ("svc-web", "svc-search"),
     }
 
 

@@ -122,6 +122,38 @@ A's service DEPENDS_ON the inventory service
 Coarse is enough here. Blast radius asks what breaks, not which endpoint breaks, and for
 that question a listening port is a service.
 
+### The infrastructure layer is one level deeper than people model it
+
+The call layer is the hard half to *acquire*. The infrastructure layer is easy to acquire
+and easy to get wrong, in one specific way: it is usually modelled one level too shallow.
+
+A Kubernetes node is rarely a physical server. It is a virtual machine — an OpenStack
+instance, an EC2 instance, a guest on a hypervisor another team runs — and several of them
+commonly share one physical machine. The full chain is six levels, and the third is the one
+that gets left out:
+
+```
+service → node → vm → host → rack → site
+                 ↑
+                 the cluster cannot see past here
+```
+
+Everything the cluster reports is true. Three nodes are three nodes. What is false is the
+inference everyone draws from it — that three nodes are three failure domains — and that
+inference is wrong precisely when the `vm → host` edge is missing, which is also exactly
+when nothing can correct it. Kubernetes does not know what it is standing on, so no amount
+of querying the cluster recovers the level. It has to come from the layer below (the cloud
+or virtualization API, or a CMDB that records placement), and joining it to the node is the
+same identity problem as §6.
+
+This is why `EntityKind.VM` is distinct from `EntityKind.HOST`. Collapsing them is
+tempting — both are "a machine a thing runs on" — and it silently removes the only edge
+that makes the defect visible. `audit._shared_foundation()` (§9) walks `RUNS_ON` and
+`HOSTED_IN` down from every place a service can run and reports the **nearest** thing all
+of them share: a host reads as `redundancy on one machine`, a rack as `redundancy in one
+rack`, and a site as nothing at all, because sharing a datacentre is a fact about the
+estate rather than a defect and a finding on every service is how a report gets ignored.
+
 ---
 
 ## 3. The data model
@@ -132,7 +164,7 @@ up fitting none of them.
 ```python
 class Entity(BaseModel):
     id: str
-    kind: EntityKind          # site, rack, host, cluster, node, service,
+    kind: EntityKind          # site, rack, host, vm, cluster, node, service,
                               # database, load_balancer, network_segment, external
     name: str
     status: Status = UP       # up | degraded | down | unknown
@@ -527,6 +559,39 @@ Watching the diff is a different activity from reading the map. Entities vanishi
 is usually a broken connector rather than a decommission. A `DEPENDS_ON` flipping from soft
 to hard changes every answer downstream of it.
 
+### Auditing the map at rest — `check` and `spof`
+
+`src/orrery/world/audit.py`
+
+Diffing catches decay between two points in time. `audit()` asks a different question of a
+single snapshot: **is this map good enough to answer with yet?** It is the command with the
+best ratio of value to prerequisites, because it needs no incident history, no calibration,
+and no hand-modelled dependency — only whatever the first connector returned.
+
+| Finding | What it means |
+|---|---|
+| `no provenance` | nothing records where the entity came from |
+| `isolated` | no edges at all; nearly always a join that failed quietly |
+| `no recorded placement` | a service, database, node or vm with no `RUNS_ON` edge — it is running somewhere |
+| `floating` | it depends on things but sits nowhere: half a join |
+| `redundancy on paper only` | `replicas > 1` with one recorded place to run |
+| `redundancy on one machine` | several places to run, all standing on one physical host |
+| `redundancy in one rack` | several machines, one power feed and one switch |
+| `quorum is not a number` / `quorum unreachable` | a cluster whose `quorum` cannot be parsed, or exceeds the members the map knows about |
+
+The two redundancy findings come from `_shared_foundation()`, which walks `RUNS_ON` and
+`HOSTED_IN` down from each place a service can run and intersects the chains. Only the
+**nearest** shared thing is reported — a service on one hypervisor is necessarily also in
+one rack and one site, and saying all three turns one defect into three findings. A shared
+`site` is not reported at all: everything in one datacentre is a fact about the estate, and
+a finding on every service is how a report teaches people to skip it.
+
+`single_points_of_failure()` answers the other half — not "is the map wrong" but "where is
+the map most frightening". It ranks entities by how much goes down with them, and it is
+deliberately blind to declared redundancy, since redundancy that is recorded but not real is
+exactly what the ranking exists to surface. Reach is computed as a bitset dynamic program
+over the SCC condensation rather than one traversal per entity; §14 has the numbers.
+
 ---
 
 ## 10. The CLI, and reading it from a machine
@@ -735,13 +800,13 @@ happened to land on that host, so there was nothing to walk.
 | connectors | `orrery.connectors` | Inventory source interface; `.kubernetes` is the reference implementation |
 | adapters | `orrery.adapters` | Read a world out of a graph database you already run (`.neo4j`) |
 | resolve | `orrery.resolve` | Propose alias candidates; never merges |
-| world | `orrery.world` | The graph, snapshot and fork, blast radius, `.diff` between snapshots |
+| world | `orrery.world` | The graph, snapshot and fork, blast radius, `.diff` between snapshots, `.audit` for map quality and single points of failure |
 | sim | `orrery.sim` | behavior models, consequence propagation |
 | scenarios | `orrery.scenarios` | Scenario format, and the runner that breaks the world, hands an agent its tools and scores what it did |
 | scoring | `orrery.scoring` | Four-axis rubric, no-action gate |
 | backtest | `orrery.backtest` | Replay past incidents and grade the engine |
 | harness | `orrery.harness` | Agent tool-surface contract and the audit log; real tool adapters live outside this repo |
-| cli | `orrery.cli` | Six commands, each with `--json-out` and a schema version |
+| cli | `orrery.cli` | Eight commands, each with `--json-out` and a schema version |
 
 ---
 

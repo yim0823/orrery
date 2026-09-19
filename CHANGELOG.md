@@ -17,9 +17,32 @@ this section of the file will say so when they do.
   not know what it is standing on — so the map is the only place the question can be
   asked. Sharing a *site* is deliberately not reported; everything in one datacentre is a
   fact about the estate, and a finding on every service teaches people to skip the report.
+- **`redundancy in one rack`.** A rack is one power feed and one top-of-rack switch, so
+  two machines in it are two machines and one failure domain. It was previously silent,
+  lumped in with the deliberate exclusion of `site`, which only ever had a justification
+  for `site`: a shared datacentre is a fact about the estate, a shared rack is something
+  someone can move a server out of this week. Only the **nearest** shared foundation is
+  reported, so a service on one hypervisor still reads as `redundancy on one machine`
+  rather than producing three findings for one defect.
+- **The shipped demo world now contains the trap the documentation is about.** It gained a
+  rack layer, a hypervisor with two virtual machines on it, and a service whose two
+  Kubernetes nodes both stand on that one machine, so `orrery check` in the quickstart
+  prints the finding rather than the README merely describing it. `spof` now ranks that
+  hypervisor above the bare-metal hosts, which is the point.
 - The documentation now names the **two layers** a map is made of — infrastructure (what
   sits on what, from an inventory) and call (who talks to whom, in no inventory) — and
-  how to build the second without instrumenting every service.
+  how to build the second without instrumenting every service. `docs/ARCHITECTURE.md`
+  gained a section on the map audit (`check`, `spof`), which was undocumented.
+
+### Fixed
+
+- **`README.ko.md` documented behavior the engine does not have.** Its `simulate` output
+  showed `replicas=3` and `replicas=1` as reasons and the prose explained the result by
+  replica counts. The engine counts surviving `RUNS_ON` edges and has not read a replica
+  attribute for two releases; the Korean README was teaching a model of the tool that was
+  wrong. Its connector example also called `EntityKind.host`, which raises
+  `AttributeError`. Both corrected, along with a status table that still claimed
+  backtesting and snapshot diffing were unbuilt.
 
 ## [0.2.0] — 2026-09-19
 

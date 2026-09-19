@@ -46,8 +46,8 @@ def test_it_counts_what_it_looked_at():
     # Asserting against a second copy of the same call proves nothing, so the numbers are
     # pinned to the fixture. They change when the demo world does, which is the point.
     a = audit(_demo())
-    assert a.entities == 18
-    assert a.relations == 25
+    assert a.entities == 26
+    assert a.relations == 37
 
 
 def test_an_isolated_entity_is_flagged():
@@ -114,8 +114,8 @@ def test_missing_provenance_is_flagged():
 
 def test_it_reports_how_much_rests_on_one_source():
     a = audit(_demo())
-    assert a.sources == {"static_yaml": 18}
-    assert a.single_sourced == 18
+    assert a.sources == {"static_yaml": 26}
+    assert a.single_sourced == 26
     assert a.cross_confirmed == 0
 
 

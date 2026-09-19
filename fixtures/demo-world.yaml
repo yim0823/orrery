@@ -2,16 +2,24 @@
 entities:
   - {id: site-a, kind: site, name: "Site A (IDC)"}
   - {id: site-b, kind: site, name: "Site B (cloud region)"}
+  - {id: rack-a1, kind: rack, name: "a1 (one PDU, one top-of-rack switch)"}
+  - {id: rack-b1, kind: rack, name: "b1"}
   - {id: host-a1, kind: host, name: "a1", attrs: {cpu: 32, mem_gb: 128}}
   - {id: host-a2, kind: host, name: "a2", attrs: {cpu: 32, mem_gb: 128}}
   - {id: host-b1, kind: host, name: "b1", attrs: {cpu: 16, mem_gb: 64}}
+  - {id: host-a3, kind: host, name: "a3", attrs: {cpu: 64, mem_gb: 256}}   # hypervisor
+  - {id: vm-a3a, kind: vm, name: "a3a"}
+  - {id: vm-a3b, kind: vm, name: "a3b"}
   - {id: k8s-main, kind: cluster, name: "main"}
   - {id: node-a1, kind: node, name: "node-a1"}
   - {id: node-a2, kind: node, name: "node-a2"}
   - {id: node-b1, kind: node, name: "node-b1"}
+  - {id: node-a3, kind: node, name: "node-a3"}
+  - {id: node-a4, kind: node, name: "node-a4"}
   - {id: svc-web, kind: service, name: "web", attrs: {replicas: 3}}
   - {id: svc-checkout, kind: service, name: "checkout", attrs: {replicas: 2}}
   - {id: svc-inventory, kind: service, name: "inventory", attrs: {replicas: 1}}
+  - {id: svc-search, kind: service, name: "search", attrs: {replicas: 2}}            # two nodes, one machine
   - {id: svc-inventory-prod, kind: service, name: "inventory-prod", attrs: {replicas: 1}}  # same thing, other system's name
   - {id: db-orders, kind: database, name: "orders", attrs: {engine: postgres}}       # primary + replica, placed below
   - {id: db-stock, kind: database, name: "stock", attrs: {engine: mysql}}            # single instance
@@ -19,12 +27,23 @@ entities:
   - {id: ext-payments, kind: external, name: "payments provider"}
   - {id: etcd, kind: cluster, name: "etcd (quorum 2 of 3)", attrs: {quorum: 2, members: 3}}
 relations:
-  - {src: host-a1, dst: site-a, kind: HOSTED_IN}
-  - {src: host-a2, dst: site-a, kind: HOSTED_IN}
-  - {src: host-b1, dst: site-b, kind: HOSTED_IN}
+  - {src: rack-a1, dst: site-a, kind: HOSTED_IN}
+  - {src: rack-b1, dst: site-b, kind: HOSTED_IN}
+  - {src: host-a1, dst: rack-a1, kind: HOSTED_IN}
+  - {src: host-a2, dst: rack-a1, kind: HOSTED_IN}
+  - {src: host-a3, dst: rack-a1, kind: HOSTED_IN}
+  - {src: host-b1, dst: rack-b1, kind: HOSTED_IN}
   - {src: node-a1, dst: host-a1, kind: RUNS_ON}
   - {src: node-a2, dst: host-a2, kind: RUNS_ON}
   - {src: node-b1, dst: host-b1, kind: RUNS_ON}
+  - {src: vm-a3a, dst: host-a3, kind: RUNS_ON}
+  - {src: vm-a3b, dst: host-a3, kind: RUNS_ON}
+  - {src: node-a3, dst: vm-a3a, kind: RUNS_ON}
+  - {src: node-a4, dst: vm-a3b, kind: RUNS_ON}
+  - {src: node-a3, dst: k8s-main, kind: MEMBER_OF}
+  - {src: node-a4, dst: k8s-main, kind: MEMBER_OF}
+  - {src: svc-search, dst: node-a3, kind: RUNS_ON}
+  - {src: svc-search, dst: node-a4, kind: RUNS_ON}
   - {src: node-a1, dst: k8s-main, kind: MEMBER_OF}
   - {src: node-a2, dst: k8s-main, kind: MEMBER_OF}
   - {src: node-b1, dst: k8s-main, kind: MEMBER_OF}
@@ -39,6 +58,7 @@ relations:
   - {src: db-stock, dst: host-a1, kind: RUNS_ON}
   # the storefront still serves pages when checkout is broken; you just cannot buy
   - {src: svc-web, dst: svc-checkout, kind: DEPENDS_ON, strength: soft}
+  - {src: svc-web, dst: svc-search, kind: DEPENDS_ON, strength: soft}
   - {src: svc-checkout, dst: db-orders, kind: DEPENDS_ON}
   - {src: svc-checkout, dst: svc-inventory, kind: DEPENDS_ON}
   # checkout queues orders and retries; the queue holds about forty minutes

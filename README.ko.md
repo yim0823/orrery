@@ -15,7 +15,7 @@ root: host-a1 (host)
   hop 1: node-a1 (node), db-stock (database)
   hop 2: svc-web (service), svc-inventory (service)
   hop 3: svc-checkout (service)
-impacted: 5 / 16
+impacted: 5 / 25
 ```
 
 서버 한 대를 골랐더니 세 단계 건너 결제 서비스까지 나옵니다. `host-a1`과 `svc-checkout`은 직접 연결된 적이 없습니다. 그 사이에 노드, 데이터베이스, 재고 서비스가 있고, 사람이 머릿속으로 세 단계를 따라가기는 어렵습니다.
@@ -29,21 +29,24 @@ impacted: 5 / 16
 ```
 $ orrery simulate host-a1
 
-  host-a1        -> down      passthrough
-  node-a1        -> down      passthrough
-  db-stock       -> down
-  svc-web        -> degraded  replicas=3
-  svc-inventory  -> down      replicas=1
-  svc-checkout   -> down      hard dep down
+  host-a1                  -> down      passthrough
+  node-a1                  -> down      passthrough
+  db-stock                 -> down
+  svc-web                  -> degraded  dep degraded
+  svc-inventory            -> down      hard dep down
+  svc-checkout             -> down      hard dep down
 ```
 
 같은 서버인데 결과가 다릅니다.
 
-- `svc-web`은 **성능 저하**입니다. 복제본이 3개라 하나를 잃어도 서비스는 삽니다.
-- `svc-inventory`는 **죽습니다**. 복제본이 1개뿐입니다.
+- `svc-web`은 **성능 저하**입니다. 돌 곳이 하나 남아 있어 서비스 자체는 살고, 대신 체크아웃이
+  죽어서 한 칸 내려갑니다. **복제본 수를 적어 놨기 때문이 아니라** 그래프에 `RUNS_ON` 간선이
+  하나 더 있기 때문입니다.
+- `svc-inventory`는 **죽습니다**. 필요한 데이터베이스가 그 서버와 함께 죽었습니다.
 - `svc-checkout`은 재고 서비스에 강하게 의존하므로 **연쇄로 죽습니다**.
 
-새벽에 알아야 할 건 "다섯 개가 영향받는다"가 아니라 **"체크아웃이 멈춘다, 원인은 재고 서비스의 복제본이 하나뿐이기 때문"**입니다. 첫 번째 명령이 범위를 주고, 두 번째 명령이 결과를 줍니다.
+새벽에 알아야 할 건 "다섯 개가 영향받는다"가 아니라 **"체크아웃이 멈춘다, 원인은 재고 DB가
+그 서버와 함께 죽었기 때문"**입니다. 첫 번째 명령이 범위를 주고, 두 번째 명령이 결과를 줍니다.
 
 ---
 
@@ -57,7 +60,9 @@ uv run orrery blast site-a
 uv run orrery simulate db-stock
 ```
 
-`fixtures/demo-world.yaml`은 합성 데이터입니다. 서버 3대, 클러스터 1개, 서비스 4개, DB 2개로 된 작은 가상 회사이고 실제 어느 회사와도 무관합니다. 열어 보면 형식이 바로 보입니다.
+`fixtures/demo-world.yaml`은 합성 데이터입니다. IDC 2곳, 랙 2개, 물리 서버 4대, 서비스 5개,
+DB 2개로 된 작은 가상 회사이고 실제 어느 회사와도 무관합니다. 그중 한 구석이 가상화되어 있고,
+**이 README의 나머지가 다루는 함정이 거기에 들어 있습니다.** 열어 보면 형식이 바로 보입니다.
 
 ```yaml
 entities:
@@ -74,13 +79,73 @@ relations:
 
 | 관계 | 읽는 법 | 예 |
 |---|---|---|
-| `RUNS_ON` | A가 B 위에서 돈다 | 서비스가 노드 위에서 |
-| `HOSTED_IN` | A가 B 안에 놓여 있다 | 서버가 IDC 안에 |
+| `RUNS_ON` | A가 B 위에서 돈다 | 서비스가 노드 위에서, 노드가 VM 위에서 |
+| `HOSTED_IN` | A가 B 안에 놓여 있다 | 서버가 랙 안에, 랙이 IDC 안에 |
 | `MEMBER_OF` | A가 B의 구성원이다 | 노드가 클러스터의 |
 | `DEPENDS_ON` | A가 B를 필요로 한다 | 서비스가 DB를 |
 | `CONNECTS_TO` | A가 B와 통신한다 | 네트워크 경로 |
 
 앞의 넷이 영향 전파 경로입니다. B가 죽으면 B를 가리키는 A들이 영향을 받습니다.
+
+### 명령
+
+| 명령 | 하는 일 |
+|---|---|
+| `orrery ingest <file.yaml>` | 월드를 읽어 `.orrery/` 아래에 저장 |
+| `orrery blast <entity-id>` | 구조적 영향 범위 — 무엇이 몇 홉 거리에 있나 |
+| `orrery simulate <entity-id>` | 행동 결과 — 실제로 무엇이 죽고 무엇이 성능 저하인가 |
+| `orrery resolve <file.yaml>` | 개체 해소 후보 제안 (절대 자동 병합하지 않음) |
+| `orrery check` | 이 지도가 쓸 만한가 — 지도 자체의 구멍과 어긋남 |
+| `orrery spof` | 무엇이 제일 위험한가 — 같이 죽는 것의 양으로 순위 |
+| `orrery diff <a> <b>` | 두 스냅샷 사이에 무엇이 달라졌나 |
+| `orrery backtest <dir>` | 과거 장애를 재생해 이 엔진을 채점 |
+
+모든 명령에 `--json-out`이 있습니다.
+
+### 첫날 아침에 이미 쓸모 있는 두 명령
+
+장애 이력이 쌓이기 전에도, 아무것도 보정하기 전에도, 의존성을 손으로 하나도 안 그렸어도
+돕니다. 커넥터가 처음 물어다 준 것 위에서 그대로 실행됩니다.
+
+```
+$ orrery spof --limit 5
+
+single points of failure, by what goes with them (26 entities)
+
+    1. site-a        16 (64.0%)  site
+    2. rack-a1       15 (60.0%)  rack
+    3. k8s-main       9 (36.0%)  cluster
+    4. etcd           6 (24.0%)  cluster
+    5. host-a3        6 (24.0%)  host
+```
+
+**구조적으로 닿는 범위이고, 적어 놓은 이중화는 일부러 무시합니다.** 적혀만 있고 실제로는 아닌
+이중화를 드러내는 것이 이 목록의 목적이기 때문입니다. 5위의 `host-a3`가 그 예입니다 — 쿠버네티스가
+서로 독립이라고 믿는 노드 두 개를 물리 서버 한 대가 받치고 있습니다.
+[아래에서 설명합니다](#사람들이-빠뜨리는-층-클러스터가-무엇-위에-서-있나).
+
+```
+$ orrery check
+
+map: 26 entities, 37 relations
+  sources: static_yaml (26)
+  0 entities confirmed by more than one source, 26 by exactly one
+
+redundancy on paper only (1)
+  svc-checkout                         replicas=2 but one place to run: losing it loses everything
+
+redundancy on one machine (1)
+  svc-search                           2 places to run, all of them on host-a3 — losing it loses all of them
+
+isolated (1)
+  svc-inventory-prod                   nothing connects to it — usually a join that failed, not a server nobody uses
+```
+
+- `redundancy on paper only` — 복제본 2개라고 적혀 있는데 돌 곳은 하나입니다.
+- `redundancy on one machine` — 돌 곳이 정말 둘인데 그 둘이 같은 물리 서버 위입니다.
+- `isolated` — 아무도 안 쓰는 서버가 아니라, 대개 조용히 실패한 조인입니다.
+
+셋 다 오류가 아닙니다. 다만 이 지도를 믿기 전에 사람이 한 번 봐야 하는 것들입니다.
 
 ---
 
@@ -101,8 +166,10 @@ flowchart TB
 
   subgraph infra["인프라 층 — 무엇이 무엇 위에 있나"]
     direction LR
-    node["노드"] -->|RUNS_ON| host["서버"]
-    host -->|HOSTED_IN| site["IDC"]
+    node["노드"] -->|RUNS_ON| vm["VM"]
+    vm -->|RUNS_ON| host["물리 서버"]
+    host -->|HOSTED_IN| rack["랙"]
+    rack -->|HOSTED_IN| site["IDC"]
     host -->|CONNECTS_TO| seg["네트워크 대역"]
     node -->|MEMBER_OF| cluster["클러스터"]
   end
@@ -124,26 +191,54 @@ flowchart TB
 
 ### 사람들이 빠뜨리는 층: 클러스터가 무엇 위에 서 있나
 
-가상화는 아무도 의도하지 않은 채로 이중화를 가짜로 만듭니다.
+가상화는 아무도 의도하지 않은 채로 이중화를 가짜로 만듭니다. 쿠버네티스 노드는 대개 물리
+서버가 아니라 **가상 머신**입니다. OpenStack 인스턴스든 EC2든 남이 운영하는 하이퍼바이저든,
+그 가상 머신 여럿이 물리 서버 한 대 위에 같이 올라가 있는 것이 보통입니다.
 
+```mermaid
+flowchart TB
+  subgraph seen["클러스터가 볼 수 있는 것"]
+    direction TB
+    svc["svc-search · 복제본 2"] -->|RUNS_ON| nodes["node-a3 · node-a4"]
+  end
+  subgraph unseen["클러스터 안에서는 누구도 볼 수 없는 것"]
+    direction TB
+    vms["vm-a3a · vm-a3b"] -->|RUNS_ON| host["host-a3 — 물리 서버 한 대"]
+    host -->|HOSTED_IN| rack["rack-a1 — 전원 하나, 스위치 하나"]
+    rack -->|HOSTED_IN| site["site-a"]
+  end
+  nodes -.->|"RUNS_ON — 대부분의 지도에 없는 줄"| vms
 ```
-서비스 → 노드 → VM → 물리 서버 → 랙 → IDC
-                └──── 여기가 빠진다 ────┘
-```
 
-**쿠버네티스는 자기가 무엇 위에 서 있는지 모릅니다.** 노드 세 개는 실패할 자리 세 개처럼
-보이는데, 그 셋이 한 물리 서버 위의 가상머신 셋이면 자리는 하나입니다. 클러스터 안에서는
-누구도 이걸 알려줄 수 없고, 그래서 **이 질문을 할 수 있는 곳은 지도뿐입니다.**
+클러스터가 아는 것은 전부 사실입니다. 노드는 정말로 둘입니다. **틀린 것은 개수가 아니라
+그 둘이 서로 독립이라는 가정**이고, 그 가정은 지도에 없는 저 줄 안에 통째로 들어 있습니다.
+쿠버네티스는 이걸 바로잡을 수 없습니다. 자기가 무엇 위에 서 있는지를 모르기 때문입니다.
+그래서 **이 질문을 할 수 있는 곳은 지도뿐입니다.**
 
-`vm`이 `host`와 별개의 종류인 이유가 정확히 이것이고, `orrery check`가 잡아냅니다.
+`vm`이 `host`와 별개의 종류인 이유가 정확히 이것입니다. 둘을 하나로 뭉뚱그리면 사슬이 한 칸
+짧아지고, 짧아지는 순간 이 함정이 보이지 않게 됩니다. 이 칸까지 채워진 지도에서는 이름이 붙어
+나옵니다. 아래는 예시가 아니라 **리포에 들어 있는 데모 월드에 `orrery check`를 돌린 결과**입니다.
 
 ```
 redundancy on one machine (1)
-  svc-api    3 places to run, all of them on host-phys-1 — losing it loses all of them
+  svc-search    2 places to run, all of them on host-a3 — losing it loses all of them
 ```
 
-**IDC를 공유하는 건 보고하지 않습니다.** 한 데이터센터 안에 다 있는 건 결함이 아니라 사실이고,
-모든 서비스에 소견을 달면 사람들이 리포트를 안 보게 됩니다.
+물리 서버는 다른데 **랙만 같은** 경우는 같은 결함이지만 고치는 방법이 다릅니다 — 가상 머신을
+옮기는 게 아니라 서버를 옮겨야 합니다. 그래서 따로 나옵니다. 데모 월드에는 이 경우가 없고,
+있는 지도에서는 이렇게 읽힙니다.
+
+```
+redundancy in one rack (1)
+  svc-orders    2 places to run on different machines, all in rack-a1 — one power feed, one top-of-rack switch
+```
+
+**가장 가까운 공통 바닥 하나만 보고합니다.** 하이퍼바이저 하나를 공유하는 서비스는 필연적으로
+랙도 하나, IDC도 하나입니다. 셋 다 말하면 결함 하나에 소견이 셋 달립니다.
+
+**IDC를 공유하는 건 아예 보고하지 않습니다.** 한 데이터센터 안에 다 있는 건 결함이 아니라
+사실이고, 모든 서비스에 소견을 달면 사람들이 리포트를 안 보게 됩니다. 보고할 값어치가 있는
+것은 **몰랐을 수도 있고, 이번 주에 고칠 수도 있는** 층뿐입니다.
 
 ### 호출 층은 계측 없이도 만들 수 있습니다
 
@@ -190,7 +285,7 @@ class MyCmdbConnector:
         d = Discovery()
         for row in my_cmdb_api.list_servers():
             d.entities.append(Entity(
-                id=f"host-{row['id']}", kind=EntityKind.host, name=row["hostname"],
+                id=f"host-{row['id']}", kind=EntityKind.HOST, name=row["hostname"],
                 attrs={"ip": row["ip"], "env": row["env"]},
             ))
             d.relations.append(Relation(
@@ -236,17 +331,59 @@ candidate: svc-inventory (inventory) | svc-inventory-prod (inventory-prod)
 
 ## 현재 상태
 
-작동합니다. 테스트 15개 통과. 다만 초기 단계이고 정직하게 말하면 이렇습니다.
+초기 알파, `0.3.0`. 테스트 238개 통과. 정직하게 말하면 이렇습니다.
+
+**라이선스.** 첫 두 커밋이 회사 장비의 회사 계정으로 작성됐습니다. 사내 정보는 하나도 들어 있지
+않고 커밋 훅이 그걸 막지만, 저작권 귀속이 문서로 정리되기 전까지 **출처가 깨끗한 사슬이
+필요한 곳에서는 아직 쓸 수 없습니다.**
 
 | 되는 것 | 아직 안 되는 것 |
 |---|---|
-| 개체·관계 모델, YAML 적재 | 실제 시스템 커넥터 (직접 써야 함) |
-| 구조적 영향 범위 계산 | 시각화 (터미널 출력뿐) |
-| 행동 모델 기반 결과 전파 | 시점 비교·스냅샷 버저닝 |
-| 개체 해소 후보 제안 | 정확도 검증 (실제 장애 대조가 다음 과제) |
-| 4축 신뢰 루브릭 | 가중치·심각도 (지금은 죽었나 살았나뿐) |
+| 개체·관계 모델, YAML 적재, 스냅샷 비교(`diff`) | 실제 시스템 커넥터 — 쿠버네티스 하나뿐, 나머지는 직접 |
+| 구조적 영향 범위와 행동 기반 전파 | 용량 — 살아남은 쪽이 그 부하를 받아낼 수 있는지 |
+| 하드·소프트 의존, 유예 시간, 정족수 | 규모 — 복제본 3개 중 2개를 잃어도 1개 잃은 것과 같게 읽힘 |
+| 개체 해소 후보 제안 (자동 병합 없음) | 시각화 — 터미널과 JSON 출력뿐 |
+| 기계가 읽는 출력, Neo4j 소스 | 스스로 흐르는 시간, 동시에 움직이는 여러 행위자 |
+| 지도 감사(`check`)와 위험 순위(`spof`) | 월드 일부를 실제로 돌아가는 시스템으로 구현 |
+| 과거 장애 역채점 하네스(`backtest`) | |
 
-**가장 큰 미해결 문제는 정확도입니다.** 지도가 맞는지 어떻게 압니까. 다음 과제는 실제 장애 기록을 놓고 그때 이 계산이 맞췄을지 역채점하는 것입니다. 그 숫자가 나오기 전까지 이 도구의 답은 참고용입니다.
+**가장 큰 미해결 문제는 여전히 정확도이고, 그걸 재는 일을 아무도 안 합니다.**
+
+지도를 그려 주는 도구는 많습니다. 2026년 기준으로 CMDB·애플리케이션 의존성 매핑 제품,
+관측 도구의 서비스 맵, 카오스 플랫폼, 개발자 포털을 훑어봤지만 **자기 지도를 과거 장애에 대고
+채점하는 것은 하나도 없습니다.** 이 하네스가 하는 일이 그것이고, **채점 대상이 orrery의 지도일
+필요가 없습니다.** `orrery.adapters.neo4j`를 이미 돌리고 있는 그래프에 붙이고, 스냅샷을 저장하고,
+장애 기록을 그 위에 쓰면 채점되는 것은 당신이 갖고 있던 지도입니다.
+
+```
+$ orrery backtest fixtures/incidents
+
+backtest: 6 incident(s), 24 prediction(s) scored
+  78 entit(ies) skipped — the records say nothing about them
+
+  recall    100%   of what broke, we called broken at all
+  precision 100%   of the predictions someone checked, right
+  exact     96%   severity exactly right
+  on breaks 95%   severity exactly right, counting only what broke
+
+  ⚠ 5 prediction(s) of breakage nobody checked. Precision cannot see them,
+    so it is an upper bound: over-predicting is free until the records say otherwise.
+
+  hit            19   predicted, right severity
+  correct up      4   agreed it was unaffected
+  understated     1   said degraded, was down
+  overstated      0   said down, was degraded
+  false alarm     0   said broken, was fine
+  MISS            0   said fine, was broken
+
+⚠ fewer than 30 scored predictions. Treat these rates as a smoke test, not a measurement.
+⚠ every incident replays against one snapshot. If that snapshot was written after the
+  incidents, this measures hindsight rather than prediction — an edge learned from a
+  postmortem is already in the map being graded.
+```
+
+**이 100%를 성과로 읽으면 안 됩니다.** 표본이 6건이고, 리포트가 스스로 그렇게 경고합니다.
+지금 이 숫자가 뜻하는 것은 "잘한다"가 아니라 **"아직 실패 사례를 충분히 못 모았다"**입니다.
 
 ---
 

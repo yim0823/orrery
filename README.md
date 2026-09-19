@@ -31,7 +31,7 @@ root: host-a1 (host)
   hop 1: node-a1 (node), db-stock (database)
   hop 2: svc-web (service), svc-inventory (service)
   hop 3: svc-checkout (service)
-impacted: 5 / 17
+impacted: 5 / 25
 ```
 
 One host, and three hops later your checkout service is in the list. `host-a1` and
@@ -76,8 +76,10 @@ uv run orrery blast site-a
 uv run orrery simulate db-stock
 ```
 
-`fixtures/demo-world.yaml` is a small synthetic company — 3 hosts, a cluster, 4
-services, 2 databases. It resembles no real organization.
+`fixtures/demo-world.yaml` is a small synthetic company — two sites, two racks, four
+physical hosts, five services, two databases. One corner of it is virtualized, and that
+corner contains a trap that the rest of this README is about. It resembles no real
+organization.
 
 ### Commands
 
@@ -95,42 +97,48 @@ services, 2 databases. It resembles no real organization.
 ## Two questions you have on day one
 
 Before any incident history exists, before anyone has calibrated anything, and before you
-have modelled a single dependency by hand. These two run on whatever the first connector
-gave you.
-
-Before any incident history exists, and before anyone has calibrated anything:
+have modelled a single dependency by hand. Both run on whatever the first connector gave
+you.
 
 ```console
-$ orrery spof --limit 4
+$ orrery spof --limit 5
 
-single points of failure, by what goes with them (18 entities)
+single points of failure, by what goes with them (26 entities)
 
-    1. site-a         9 (52.9%)  site
-    2. etcd           6 (35.3%)  cluster
-    3. k8s-main       6 (35.3%)  cluster
-    4. host-a1        5 (29.4%)  host
+    1. site-a        16 (64.0%)  site
+    2. rack-a1       15 (60.0%)  rack
+    3. k8s-main       9 (36.0%)  cluster
+    4. etcd           6 (24.0%)  cluster
+    5. host-a3        6 (24.0%)  host
 ```
 
 Structural reach, and deliberately blind to any declared redundancy — redundancy that is
-recorded but not real is exactly what this list exists to surface.
+recorded but not real is exactly what this list exists to surface. `host-a3` in fifth
+place is one physical server carrying two Kubernetes nodes that the cluster believes are
+independent; see [the layer people forget](#the-layer-people-forget-what-the-cluster-is-standing-on).
 
 ```console
 $ orrery check
 
-map: 18 entities, 25 relations
-  sources: static_yaml (18)
-  0 entities confirmed by more than one source, 18 by exactly one
+map: 26 entities, 37 relations
+  sources: static_yaml (26)
+  0 entities confirmed by more than one source, 26 by exactly one
 
 redundancy on paper only (1)
   svc-checkout                         replicas=2 but one place to run: losing it loses everything
+
+redundancy on one machine (1)
+  svc-search                           2 places to run, all of them on host-a3 — losing it loses all of them
 
 isolated (1)
   svc-inventory-prod                   nothing connects to it — usually a join that failed, not a server nobody uses
 ```
 
 `redundancy on paper only` is a service claiming two replicas with one recorded place to
-run. `isolated` is usually a join that failed quietly, not a server nobody uses. Neither
-is an error; both are worth someone looking at before the map is trusted.
+run. `redundancy on one machine` is a service with two real places to run that both stand
+on the same physical server. `isolated` is usually a join that failed quietly, not a
+server nobody uses. None of the three is an error; all three are worth someone looking at
+before the map is trusted.
 
 ---
 
@@ -152,8 +160,10 @@ flowchart TB
 
   subgraph infra["Infrastructure layer — what sits on what"]
     direction LR
-    node["node"] -->|RUNS_ON| host["host"]
-    host -->|HOSTED_IN| site["site"]
+    node["node"] -->|RUNS_ON| vm["vm"]
+    vm -->|RUNS_ON| host["host"]
+    host -->|HOSTED_IN| rack["rack"]
+    rack -->|HOSTED_IN| site["site"]
     host -->|CONNECTS_TO| seg["segment"]
     node -->|MEMBER_OF| cluster["cluster"]
   end
@@ -175,27 +185,59 @@ it wrong splits one thing into two and makes both answers wrong.
 
 ### The layer people forget: what the cluster is standing on
 
-Virtualization makes redundancy easy to fake without anyone meaning to.
+Virtualization makes redundancy easy to fake without anyone meaning to. A Kubernetes node
+is usually not a physical server — it is a virtual machine, on OpenStack or EC2 or a
+hypervisor someone else operates — and several of those virtual machines commonly sit on
+one physical server.
 
+```mermaid
+flowchart TB
+  subgraph seen["What the cluster can see"]
+    direction TB
+    svc["svc-search · replicas 2"] -->|RUNS_ON| nodes["node-a3 · node-a4"]
+  end
+  subgraph unseen["What nothing inside the cluster can see"]
+    direction TB
+    vms["vm-a3a · vm-a3b"] -->|RUNS_ON| host["host-a3 — one physical server"]
+    host -->|HOSTED_IN| rack["rack-a1 — one power feed, one switch"]
+    rack -->|HOSTED_IN| site["site-a"]
+  end
+  nodes -.->|"RUNS_ON — the line that is missing from most maps"| vms
 ```
-service → node → vm → host → rack → site
-                 └──── this one gets left out ────┘
-```
 
-A Kubernetes cluster does not know what it is standing on. Three nodes look like three
-places to fail; if they are three virtual machines on one physical server, they are one.
-Nothing inside the cluster can tell you that, which makes the map the only place the
-question can be asked.
+Everything the cluster knows is true. There really are two nodes. **The count is not the
+thing that is wrong — the assumption that the two are independent is**, and that
+assumption lives entirely inside the line the map does not have. Kubernetes cannot correct
+it, because Kubernetes does not know what it is standing on. The map is the only place the
+question can be asked at all.
 
-`vm` is a separate kind from `host` for exactly this reason, and `orrery check` reports it:
+This is why `vm` is a separate kind from `host` rather than another word for it. Collapse
+the two and the chain loses a level, and the moment it does, the trap becomes invisible. A
+map that has the level gets the finding by name — this is `orrery check` on the shipped
+fixture, not an illustration:
 
 ```
 redundancy on one machine (1)
-  svc-api    3 places to run, all of them on host-phys-1 — losing it loses all of them
+  svc-search    2 places to run, all of them on host-a3 — losing it loses all of them
 ```
 
-Sharing a *site* is not reported. Everything in one datacentre is a fact about the estate
-rather than a defect, and a finding on every service teaches people to skip the report.
+Two machines that share only a rack are the same defect with a different fix — move a
+server, rather than move a virtual machine — so they are reported under their own name.
+The shipped fixture does not contain this case; on a map that does, it reads:
+
+```
+redundancy in one rack (1)
+  svc-orders    2 places to run on different machines, all in rack-a1 — one power feed, one top-of-rack switch
+```
+
+Only the nearest shared foundation is reported. A service on one hypervisor is also, by
+construction, in one rack and one site; saying all three would be three findings for one
+defect.
+
+**Sharing a *site* is not reported at all.** Everything in one datacentre is a fact about
+the estate rather than a defect, and a finding on every service is how people learn to
+skip the report. What is worth reporting is the level someone could plausibly not know
+about and could act on this week.
 
 ### Where the call layer actually comes from
 
@@ -247,14 +289,16 @@ you which one you have built.
 Five relation kinds. The arrow always points **from the dependent to the depended-upon**
 — reverse one and the blast radius is silently wrong.
 
-There are sixteen entity kinds (`orrery ingest` will list them if you mistype one); the
-ones in the demo are `site`, `host`, `cluster`, `node`, `service`, `database`,
-`load_balancer` and `external`. Each kind earns its place by failing differently.
+There are seventeen entity kinds (`orrery ingest` will list them if you mistype one); the
+ones in the demo are `site`, `rack`, `host`, `vm`, `cluster`, `node`, `service`,
+`database`, `load_balancer` and `external`. Each kind earns its place by failing
+differently — `vm` and `host` are separate for the reason given
+[above](#the-layer-people-forget-what-the-cluster-is-standing-on).
 
 | Kind | Layer | Reads as |
 |---|---|---|
-| `RUNS_ON` | infrastructure | service runs on node; node runs on host |
-| `HOSTED_IN` | infrastructure | host is hosted in a site |
+| `RUNS_ON` | infrastructure | service runs on node; node runs on vm; vm runs on host |
+| `HOSTED_IN` | infrastructure | host is hosted in a rack; rack in a site |
 | `MEMBER_OF` | infrastructure | node is a member of a cluster |
 | `CONNECTS_TO` | infrastructure | host is attached to a network segment |
 | `DEPENDS_ON` | call | service depends on a database |

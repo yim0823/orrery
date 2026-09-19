@@ -90,7 +90,7 @@ class MapAudit:
 _MAX_FOUNDATION_DEPTH = 6
 
 
-def _shared_foundation(world: World, entity_id: str) -> tuple[str, int] | None:
+def _shared_foundation(world: World, entity_id: str) -> tuple[str, int, EntityKind] | None:
     """Do all of this entity's places to run stand on one thing further down?
 
     Virtualization makes redundancy easy to fake without anyone meaning to. Three
@@ -100,8 +100,9 @@ def _shared_foundation(world: World, entity_id: str) -> tuple[str, int] | None:
     be asked at all.
 
     Follows `RUNS_ON` and `HOSTED_IN` down from each place and reports the deepest thing
-    every one of them shares. Returns None for a single place, since that is the separate
-    and more obvious finding.
+    every one of them shares, along with its kind, since a shared physical server and a
+    shared rack are the same defect with different fixes. Returns None for a single place,
+    since that is the separate and more obvious finding.
     """
     places = world.out_edges(entity_id, RelationKind.RUNS_ON)
     if len(places) < 2:
@@ -133,9 +134,13 @@ def _shared_foundation(world: World, entity_id: str) -> tuple[str, int] | None:
     # The deepest shared thing is the interesting one: a site everything shares is not
     # news, a single physical server under three "redundant" nodes is.
     deepest = min(shared, key=lambda s: min(c.index(s) for c in chains if s in c))
-    if world.entity(deepest).kind in (EntityKind.SITE, EntityKind.RACK):
-        return None  # everything in one site is a fact about the estate, not a defect
-    return deepest, len(places)
+    kind = world.entity(deepest).kind
+    if kind is EntityKind.SITE:
+        # Everything in one datacentre is a fact about the estate rather than a defect, and
+        # a finding on every service teaches people to skip the report. A rack is not that:
+        # it is one power feed and one top-of-rack switch, and it can be moved off.
+        return None
+    return deepest, len(places), kind
 
 
 def audit(world: World) -> MapAudit:
@@ -187,15 +192,25 @@ def audit(world: World) -> MapAudit:
         if e.kind is EntityKind.SERVICE:
             concentrated = _shared_foundation(world, e.id)
             if concentrated:
-                where, places = concentrated
-                a.findings.append(
-                    Finding(
-                        "redundancy on one machine",
-                        e.id,
-                        f"{places} places to run, all of them on {where} — "
-                        f"losing it loses all of them",
+                where, places, kind = concentrated
+                if kind is EntityKind.RACK:
+                    a.findings.append(
+                        Finding(
+                            "redundancy in one rack",
+                            e.id,
+                            f"{places} places to run on different machines, all in {where} — "
+                            f"one power feed, one top-of-rack switch",
+                        )
                     )
-                )
+                else:
+                    a.findings.append(
+                        Finding(
+                            "redundancy on one machine",
+                            e.id,
+                            f"{places} places to run, all of them on {where} — "
+                            f"losing it loses all of them",
+                        )
+                    )
 
         if e.kind is EntityKind.CLUSTER and e.attrs.get("quorum"):
             members = len(world.in_edges(e.id, RelationKind.MEMBER_OF))

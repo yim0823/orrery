@@ -13,20 +13,26 @@ def _world(resolver=None):
 
 def test_ingest_counts():
     w = _world()
-    assert len(w) == 18
-    assert len(w.relations()) == 25
+    assert len(w) == 26
+    assert len(w.relations()) == 37
 
 
 def test_blast_radius_site_kills_everything_hosted_there():
     w = _world()
     br = blast_radius(w, "site-a")
     # hosts in site-a, their nodes, dbs on those hosts, services on those nodes, and dependents
-    for eid in ("host-a1", "host-a2", "node-a1", "node-a2", "db-orders", "db-stock",
-                "svc-inventory", "svc-checkout", "svc-web"):
+    for eid in ("rack-a1", "host-a1", "host-a2", "host-a3", "vm-a3a", "vm-a3b",
+                "node-a1", "node-a2", "node-a3", "node-a4", "db-orders", "db-stock",
+                "svc-inventory", "svc-checkout", "svc-search", "svc-web"):
         assert eid in br.impacted, eid
     assert "host-b1" not in br.impacted
-    assert br.impacted["host-a1"] == 1
-    assert br.impacted["node-a1"] == 2
+    # a rack now sits between the site and its hosts, so a host is two hops down and a
+    # node three: the depth of the chain is the thing the virtualization layer adds
+    assert br.impacted["rack-a1"] == 1
+    assert br.impacted["host-a1"] == 2
+    assert br.impacted["node-a1"] == 3
+    assert br.impacted["vm-a3a"] == 3
+    assert br.impacted["node-a3"] == 4
 
 
 def test_blast_radius_db_reaches_web_through_checkout():
@@ -42,7 +48,7 @@ def test_resolver_proposes_and_confirmed_alias_merges():
     assert {"svc-inventory", "svc-inventory-prod"} <= ids
     w = _world(Resolver([Alias("svc-inventory", "svc-inventory-prod", confirmed_by="human")]))
     assert "svc-inventory-prod" not in w.g
-    assert len(w) == 17
+    assert len(w) == 25
 
 
 def test_fork_is_independent():
