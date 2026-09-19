@@ -46,7 +46,9 @@ anyone's inventory.
 
 ## Authorship
 
-Commits before 2026-09-19 carry a work email. That history is left as it stands
-rather than rewritten. Ownership of this code has not been established and is a
-question for the author and their employer to settle in writing, not something a
-commit trailer decides.
+The first two commits carry a work email address. The history is left as it
+stands rather than rewritten, because rewriting it would hide something rather
+than fix anything: this project is the author's own work, licensed under
+Apache-2.0 by him, and the rule in this file is what keeps any employer's material
+out of it. An email address in a commit header is metadata about a machine, not a
+claim about ownership.

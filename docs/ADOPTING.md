@@ -42,10 +42,9 @@ from orrery.world import World          # not orrery_engine
 $ orrery blast host-a1
 ```
 
-⚠️ **This is not published yet**, which is why the dependency above is a git reference —
-it resolves by URL and does not consult PyPI at all. Publishing is blocked on the
-licensing question in the README's project status. Note that `dependencies =
-["orrery"]`, with no URL, installs somebody else's package.
+⚠️ **This is not on PyPI yet**, which is why the dependency above is a git reference — it
+resolves by URL and does not consult PyPI at all. Note that `dependencies = ["orrery"]`,
+with no URL, installs somebody else's package.
 
 Pin it to a commit. An engine that decides what is safe to restart is not a dependency you
 want floating.

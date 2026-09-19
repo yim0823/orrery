@@ -34,15 +34,17 @@ this section of the file will say so when they do.
   how to build the second without instrumenting every service. `docs/ARCHITECTURE.md`
   gained a section on the map audit (`check`, `spof`), which was undocumented.
 
-- **`LICENSE` names a copyright holder, and `NOTICE` says what that claim rests on.**
-  The licence text shipped with `Copyright [yyyy] [name of copyright owner]` still in it,
-  which is not a small omission: a licence with no named licensor grants nothing, so the
-  most carefully written disclosure in the README sat on top of a grant that was blank.
-  The new `NOTICE` names the author, names the two commits authored on employer
-  equipment, and — the part that was missing everywhere — says what the unsettled
-  ownership means **for a reader** rather than for the author: a challenge would reach
-  whatever they built on this, because a derivative work inherits the defect in its
-  licence chain, and there is no indemnity on offer.
+- **`LICENSE` names a copyright holder.** The licence text shipped with
+  `Copyright [yyyy] [name of copyright owner]` still in it, which is not a small
+  omission: a licence with no named licensor grants nothing. It and the new `NOTICE` now
+  say Apache-2.0, copyright TaeHyoung Yim.
+- **The ownership caveat is withdrawn.** Earlier releases carried a warning that the
+  author's right to license this was unsettled because the first two commits were
+  authored on employer equipment. The author's position is that this is his own work and
+  his to license, and the documentation says that plainly now instead of hedging. What
+  the clean-room rule protects — that no employer's material is in this repository — is
+  unchanged and still enforced by a fail-closed commit hook; that was always a separate
+  question from copyright, and it is the one this repository can actually answer.
 - **The CI badge advertised a build nobody but the author can see.** The repository is
   private while licensing is open, so the badge resolved to a 404 for every reader, and
   so did the `git clone` line directly under it. Both READMEs now say the repository is
