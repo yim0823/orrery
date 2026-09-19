@@ -60,6 +60,10 @@ uv run orrery blast site-a
 uv run orrery simulate db-stock
 ```
 
+**이름.** 배포 이름은 `orrery-engine`이고, 임포트와 명령은 `orrery`입니다. PyPI의 `orrery`는
+무관한 다른 프로젝트라 짧은 이름은 애초에 쓸 수 없었습니다. 의존성 한 줄은
+[ADOPTING.md](docs/ADOPTING.md)에 있습니다. 아직 공개 배포하지 않았습니다.
+
 `fixtures/demo-world.yaml`은 합성 데이터입니다. IDC 2곳, 랙 2개, 물리 서버 4대, 서비스 5개,
 DB 2개로 된 작은 가상 회사이고 실제 어느 회사와도 무관합니다. 그중 한 구석이 가상화되어 있고,
 **이 README의 나머지가 다루는 함정이 거기에 들어 있습니다.** 열어 보면 형식이 바로 보입니다.

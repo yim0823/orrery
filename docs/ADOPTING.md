@@ -12,7 +12,7 @@ The instinct is to fork. Resist it for as long as you can.
 
 | | Depend | Fork |
 |---|---|---|
-| Upgrades | `uv lock --upgrade-package orrery` | merge conflicts forever |
+| Upgrades | `uv lock --upgrade-package orrery-engine` | merge conflicts forever |
 | Your connectors | live in your repo either way | live in your repo either way |
 | Behavior models | subclass or replace at runtime | ditto |
 | Clean-room | enforced by the boundary | you have to remember |
@@ -26,16 +26,26 @@ itself works, and when you do, send the change back rather than carrying it.
 # your-repo/pyproject.toml
 [project]
 dependencies = [
-  "orrery @ git+https://github.com/yim0823/orrery@<commit-sha>",
+  "orrery-engine @ git+https://github.com/yim0823/orrery@<commit-sha>",
 ]
 ```
 
-⚠️ **This is not on PyPI, and `orrery` there is an unrelated project** (an MVC/observer
-framework, last released 2025). A direct URL reference like the one above does not consult
-PyPI at all, so it installs the right thing — but `dependencies = ["orrery"]` without the
-URL installs somebody else's package. Publishing here is blocked on the licensing question
-in the README's project status, and whatever distribution name that eventually takes, the
-git reference above keeps working.
+**Three names, and only one of them is `orrery-engine`.** The distribution is
+`orrery-engine`, because `orrery` on PyPI is an unrelated project (an MVC/observer
+framework, last released in 2025) and was never available. The import is `orrery`, and so
+is the command:
+
+```python
+from orrery.world import World          # not orrery_engine
+```
+```console
+$ orrery blast host-a1
+```
+
+⚠️ **This is not published yet**, which is why the dependency above is a git reference —
+it resolves by URL and does not consult PyPI at all. Publishing is blocked on the
+licensing question in the README's project status. Note that `dependencies =
+["orrery"]`, with no URL, installs somebody else's package.
 
 Pin it to a commit. An engine that decides what is safe to restart is not a dependency you
 want floating.

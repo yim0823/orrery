@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.12"
 
 [options]
-exclude-newer = "2026-09-12T14:28:00.839088Z"
+exclude-newer = "2026-09-12T15:31:08.497869Z"
 exclude-newer-span = "P7D"
 
 [[package]]
@@ -85,7 +85,7 @@ wheels = [
 ]
 
 [[package]]
-name = "orrery"
+name = "orrery-engine"
 version = "0.3.0"
 source = { editable = "." }
 dependencies = [

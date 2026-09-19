@@ -1,5 +1,8 @@
 [project]
-name = "orrery"
+# The distribution is `orrery-engine`; the import and the command are `orrery`.
+# `orrery` on PyPI is an unrelated project (an MVC/observer framework, last released in
+# 2025), so the short name was never available to take.
+name = "orrery-engine"
 version = "0.3.0"
 description = "Infrastructure world engine: every server is on the map, and every action computes a consequence."
 readme = "README.md"
@@ -36,6 +39,7 @@ Source = "https://github.com/yim0823/orrery"
 Changelog = "https://github.com/yim0823/orrery/blob/main/CHANGELOG.md"
 Issues = "https://github.com/yim0823/orrery/issues"
 
+# The command stays `orrery`. It is what the documentation types and what people say.
 [project.scripts]
 orrery = "orrery.cli:app"
 

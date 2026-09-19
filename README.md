@@ -76,6 +76,10 @@ uv run orrery blast site-a
 uv run orrery simulate db-stock
 ```
 
+**Names.** The distribution is `orrery-engine`; the import and the command are `orrery`.
+`orrery` on PyPI is an unrelated project, so the short name was never available — see
+[ADOPTING.md](docs/ADOPTING.md) for the dependency line. Nothing is published yet.
+
 `fixtures/demo-world.yaml` is a small synthetic company — two sites, two racks, four
 physical hosts, five services, two databases. One corner of it is virtualized, and that
 corner contains a trap that the rest of this README is about. It resembles no real
