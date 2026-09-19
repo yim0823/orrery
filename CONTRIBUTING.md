@@ -51,9 +51,10 @@ uv run orrery simulate host-a1
 
 In rough order of value:
 
-1. **Backtesting.** The engine has never been checked against a real incident. A
-   harness that replays past incidents and scores predicted impact against what
-   actually happened is the single most valuable contribution available.
+1. **Soft dependencies.** `orrery backtest fixtures/incidents` reports three
+   `overstated` results, all the same cause: a service that queues and retries when a
+   dependency dies is modeled as dying with it. Relations need a strength, and
+   behavior models need to read it. This is the gap the harness was built to expose.
 2. **Event severity in propagation.** Today, when a degrade and a down reach the same
    entity, arrival order decides the outcome. Events need severity so the stronger one
    wins regardless of order.

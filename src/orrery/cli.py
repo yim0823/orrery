@@ -4,6 +4,7 @@ import pathlib
 
 import typer
 
+from orrery.backtest import Incident, Outcome, format_report, run
 from orrery.connectors import StaticYamlConnector
 from orrery.resolve import Resolver
 from orrery.sim import Event, propagate
@@ -56,3 +57,21 @@ def resolve(fixture: pathlib.Path):
     d = StaticYamlConnector(fixture).discover()
     for group in Resolver().propose(d.entities):
         typer.echo("candidate: " + " | ".join(f"{e.id} ({e.name})" for e in group))
+
+
+@app.command()
+def backtest(path: pathlib.Path, verbose: bool = False):
+    """Replay past incidents and score the engine against what actually happened."""
+    incidents = Incident.load_dir(path)
+    if not incidents:
+        raise typer.BadParameter(f"no incident records found in {path}")
+    report = run(incidents)
+    typer.echo(format_report(report))
+    if verbose:
+        typer.echo("\nper incident:")
+        for c in report.comparisons:
+            typer.echo(
+                f"  {c.incident_id:<12} scored {c.scored:>3}  "
+                f"miss {c.count(Outcome.MISS)}  false alarm {c.count(Outcome.FALSE_ALARM)}  "
+                f"{c.title}"
+            )

@@ -1,0 +1,14 @@
+# Synthetic.
+id: INC-0002
+title: "Stock database primary lost; inventory and checkout followed"
+occurred_at: "2026-05-02T14:07:00+09:00"
+world: world.yaml
+trigger: db-stock
+event: down
+observed:
+  svc-inventory: down
+  svc-checkout: down
+  svc-web: degraded
+  db-orders: up      # explicitly checked and healthy
+notes: |
+  db-stock has no replica, so it died outright rather than going read-only.

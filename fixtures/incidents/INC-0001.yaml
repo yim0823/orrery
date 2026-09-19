@@ -1,0 +1,20 @@
+# Synthetic. Resembles no real incident at any organization.
+id: INC-0001
+title: "Host a1 lost a PSU; checkout stopped taking orders"
+occurred_at: "2026-03-14T02:41:00+09:00"
+world: world.yaml
+trigger: host-a1
+event: down
+
+# What was actually observed. Silence is not health — anything absent here is
+# excluded from scoring, not assumed up.
+observed:
+  node-a1: down
+  db-stock: down
+  svc-inventory: down
+  svc-checkout: down
+  svc-web: degraded   # stayed up on its other replicas, slower
+
+notes: |
+  Postmortem noted web was slow but serving. Nobody checked the load balancer,
+  so it is deliberately absent from `observed` rather than recorded as up.

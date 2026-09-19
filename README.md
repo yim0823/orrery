@@ -13,9 +13,9 @@ You model your hosts, clusters, services and databases as a graph. orrery answer
 two questions over it: what is in range of a failure, and what actually goes down
 once replicas and failover are taken into account.
 
-> ⚠️ **Early alpha.** The engine works and is tested, but its output has never been
-> checked against a real incident. Read [Project status](#project-status) before you
-> rely on it for anything.
+> ⚠️ **Early alpha.** The engine works, is tested, and can grade itself against past
+> incidents — but it has not yet been graded against *yours*. Read
+> [Project status](#project-status) before relying on it.
 
 ---
 
@@ -83,6 +83,7 @@ services, 2 databases. It resembles no real organization.
 | `orrery blast <entity-id>` | Structural blast radius: what is in range, by hop |
 | `orrery simulate <entity-id>` | Behavioral result: what actually degrades or dies |
 | `orrery resolve <file.yaml>` | Propose entity-resolution candidates (never merges) |
+| `orrery backtest <dir>` | Replay past incidents and score the engine against them |
 
 ---
 
@@ -194,12 +195,45 @@ Early alpha, `0.0.1`. Honest picture:
 | Behavioral propagation with per-kind models | Snapshot diffing over time |
 | Entity-resolution candidates | Severity weighting — binary up/down only |
 | Four-axis agent trust rubric | Scenario runner (format defined, runner missing) |
+| Backtesting harness | Soft dependencies — see below |
 
-**The biggest open problem is accuracy.** Nothing here has been validated against a
-real incident. The next milestone is backtesting: take N past incidents, and score
-whether this engine would have predicted the impact — true positives, misses, and
-false alarms. Until those numbers exist, treat the output as advisory, and say so to
-anyone who asks.
+**Accuracy is the open problem, and there is now a way to measure it.**
+
+```console
+$ orrery backtest fixtures/incidents
+
+backtest: 3 incident(s), 12 prediction(s) scored
+  36 entit(ies) skipped — the records say nothing about them
+
+  recall    100%   of what broke, we predicted broken
+  precision 100%   of what we predicted, actually broke
+  exact      75%   severity exactly right
+
+  hit             7   predicted, right severity
+  correct up      2   agreed it was unaffected
+  overstated      3   said down, was degraded
+  false alarm     0   said broken, was fine
+  MISS            0   said fine, was broken
+
+⚠ fewer than 30 scored predictions. Treat these rates as a smoke test, not a measurement.
+```
+
+Write your past incidents as records — what broke, and what was *observed* to break —
+and the engine grades itself. Two design choices matter:
+
+- **Silence is not health.** An entity your record says nothing about is skipped, not
+  scored as healthy. You only learn about what someone noticed at the time, and counting
+  unexamined systems as fine inflates every number on this report.
+- **Severity counts.** Predicting "down" when something merely degraded is not a hit. It
+  is `overstated`, and it is why the demo scores 100% recall but 75% exact.
+
+Those three `overstated` results are a real gap, not noise: orrery has no notion of a
+**soft dependency**. A checkout service that queues and retries payments survives its
+payment provider going away; the engine says it dies. `fixtures/incidents/INC-0003.yaml`
+exists to keep that failure visible.
+
+Until you have run this against your own incidents, treat the output as advisory and say
+so to anyone who asks.
 
 There is one known correctness gap in propagation: when a degrade event and a down
 event reach the same entity, **arrival order decides the result.** Events need
