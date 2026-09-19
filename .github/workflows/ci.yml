@@ -32,6 +32,23 @@ jobs:
       - name: Test
         run: uv run pytest -q
 
+      - name: Internal links resolve
+        run: |
+          uv run python - <<'PY'
+          import pathlib, re, sys
+          bad = []
+          for md in list(pathlib.Path(".").glob("*.md")) + list(pathlib.Path("docs").glob("*.md")):
+              for m in re.finditer(r"\[([^\]]+)\]\(([^)#]+?)(#[^)]*)?\)", md.read_text()):
+                  t = m.group(2)
+                  if t.startswith(("http", "mailto")):
+                      continue
+                  if not (md.parent / t).resolve().exists():
+                      bad.append(f"{md}: {t}")
+          if bad:
+              print("\n".join(bad)); sys.exit(1)
+          print("all internal links resolve")
+          PY
+
       - name: Demo runs end to end
         run: |
           uv run orrery ingest fixtures/demo-world.yaml

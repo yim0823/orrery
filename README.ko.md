@@ -171,7 +171,8 @@ orrery는 태양계 기계 모형입니다. 모든 행성이 모형 위에 있�
 
 ## 더 읽기
 
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md) — 8개 계층과 설계 결정
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) — 계층 구조와 설계 결정 (영어판, 이쪽이 최신 기준)
+- [ARCHITECTURE.ko.md](docs/ARCHITECTURE.ko.md) — 같은 문서의 한국어판
 - [CLEANROOM.md](CLEANROOM.md) — 이 리포에 들어가면 안 되는 것
 - [CONTRIBUTING.md](CONTRIBUTING.md) — 기여 방법과 클린룸 규칙
 - 라이선스: [Apache-2.0](LICENSE)

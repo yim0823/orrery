@@ -1,10 +1,20 @@
 [project]
 name = "orrery"
-version = "0.0.1"
+version = "0.1.0"
 description = "Infrastructure world engine: every server is on the map, and every action computes a consequence."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "Apache-2.0" }
+authors = [{ name = "TaeHyoung Yim" }]
+keywords = ["infrastructure", "sre", "blast-radius", "dependency-graph", "incident-response"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: System Administrators",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: System :: Systems Administration",
+]
 dependencies = [
   "pydantic>=2.7",
   "networkx>=3.3",
@@ -16,6 +26,12 @@ dependencies = [
 [project.optional-dependencies]
 neo4j = ["neo4j>=5.20"]
 dev = ["pytest>=8.2", "ruff>=0.5"]
+
+[project.urls]
+Homepage = "https://github.com/yim0823/orrery"
+Source = "https://github.com/yim0823/orrery"
+Changelog = "https://github.com/yim0823/orrery/blob/main/CHANGELOG.md"
+Issues = "https://github.com/yim0823/orrery/issues"
 
 [project.scripts]
 orrery = "orrery.cli:app"

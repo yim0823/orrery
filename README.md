@@ -198,6 +198,7 @@ someone acts on that answer at 3am.
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md) — data model, propagation, extension points, tradeoffs
+- [Architecture (한국어)](docs/ARCHITECTURE.ko.md) — the same document in Korean; the English one is kept current
 - [Clean-room rules](CLEANROOM.md) — what may never enter this repository
 - [Contributing](CONTRIBUTING.md)
 
@@ -205,7 +206,7 @@ someone acts on that answer at 3am.
 
 ## Project status
 
-Early alpha, `0.0.1`. Honest picture:
+Early alpha, `0.1.0`. Honest picture:
 
 | Works | Not yet |
 |---|---|
