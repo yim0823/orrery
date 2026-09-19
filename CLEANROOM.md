@@ -1,6 +1,6 @@
 # Clean room rules
 
-This engine is designed to be published as open source by its owner. To make that possible without a cleanup pass, the following are **forbidden in this repository**:
+This engine is published as open source by its owner. To make that possible without a cleanup pass, the following are **forbidden in this repository**:
 
 - real company names, product names of internal systems, team or person names
 - real hostnames, IP addresses/ranges, domain names, account IDs
@@ -43,12 +43,3 @@ orrery        --never-->       company repo
 The engine reads from and computes over whatever graph the company repo already
 owns. It does not carry its own store, its own connectors, or its own copy of
 anyone's inventory.
-
-## Authorship
-
-The first two commits carry a work email address. The history is left as it
-stands rather than rewritten, because rewriting it would hide something rather
-than fix anything: this project is the author's own work, licensed under
-Apache-2.0 by him, and the rule in this file is what keeps any employer's material
-out of it. An email address in a commit header is metadata about a machine, not a
-claim about ownership.

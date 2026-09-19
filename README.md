@@ -2,18 +2,10 @@
 
 <h1>orrery</h1>
 
+[![CI](https://github.com/yim0823/orrery/actions/workflows/ci.yml/badge.svg)](https://github.com/yim0823/orrery/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue.svg)](pyproject.toml)
 [![Status](https://img.shields.io/badge/status-early--alpha-orange.svg)](#project-status)
-
-> 🔒 **This repository is still private.** If you are reading this without access to it,
-> the clone line will not work for you — that is the state of the project, not a broken
-> link. There is no CI badge here for the same reason: a badge that only the author can
-> resolve advertises a green build nobody else can check. CI runs on every push — lint,
-> tests on 3.12 and 3.13, a fresh-clone smoke run, and three checks that the documentation
-> has not drifted from the tool (its command output, its mermaid diagrams, its internal
-> links). [`.github/workflows/ci.yml`](.github/workflows/ci.yml) is in the repository, and
-> `bash scripts/smoke.sh` runs most of it locally.
 
 **orrery computes what else fails when one thing in your infrastructure does.**
 
@@ -75,7 +67,7 @@ stock database went with the host."*
 Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 
 ```bash
-git clone https://github.com/yim0823/orrery && cd orrery   # private, for now
+git clone https://github.com/yim0823/orrery && cd orrery
 uv sync
 uv run orrery ingest fixtures/demo-world.yaml
 uv run orrery blast site-a

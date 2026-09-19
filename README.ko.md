@@ -2,15 +2,6 @@
 
 # orrery
 
-> 🔒 **이 리포는 아직 비공개입니다.** 접근 권한 없이 이 문서를 보고 계시다면 클론 명령은
-> 동작하지 않습니다 — 링크가 깨진 게 아니라 프로젝트의 상태가 그렇습니다.
-> CI 배지를 달지 않은 것도 같은 이유입니다. 저자만
-> 확인할 수 있는 배지는 아무도 검증 못 하는 초록불을 광고하는 것입니다. CI는 푸시마다
-> 돕니다 — 린트, 3.12·3.13 테스트, 새 클론 스모크, 그리고 문서가 도구에서 떠내려가지
-> 않았는지 검사 셋(명령 출력, mermaid 다이어그램, 내부 링크).
-> [`.github/workflows/ci.yml`](.github/workflows/ci.yml)이 리포에 있고,
-> `bash scripts/smoke.sh`로 대부분을 로컬에서 돌릴 수 있습니다.
-
 **이 서버를 내리면 무엇이 같이 죽습니까?**
 
 지금 이 질문에 답하는 방법은 대개 셋 중 하나입니다. 오래된 위키 문서를 찾아본다. 이 시스템을 잘 아는 선배에게 묻는다. 아니면 그냥 꺼보고 누가 소리치는지 기다린다.
@@ -62,7 +53,7 @@ $ orrery simulate host-a1
 ## 5분 만에 직접 해보기
 
 ```bash
-git clone https://github.com/yim0823/orrery && cd orrery   # 아직 비공개입니다
+git clone https://github.com/yim0823/orrery && cd orrery
 uv sync
 uv run orrery ingest fixtures/demo-world.yaml
 uv run orrery blast site-a

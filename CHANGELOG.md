@@ -45,11 +45,9 @@ this section of the file will say so when they do.
   the clean-room rule protects — that no employer's material is in this repository — is
   unchanged and still enforced by a fail-closed commit hook; that was always a separate
   question from copyright, and it is the one this repository can actually answer.
-- **The CI badge advertised a build nobody but the author can see.** The repository is
-  private while licensing is open, so the badge resolved to a 404 for every reader, and
-  so did the `git clone` line directly under it. Both READMEs now say the repository is
-  private, say why, and point at the workflow file and `scripts/smoke.sh` instead of at a
-  green square only one person can load.
+- **Published.** The repository is public, so the CI badge and the `git clone` line
+  resolve for everyone rather than 404ing for everyone but the author, which is what they
+  did for as long as they sat above a private repository.
 
 ### Fixed
 
