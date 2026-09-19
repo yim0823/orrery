@@ -99,7 +99,7 @@ def replay(incident: Incident) -> Comparison:
     reach = set(blast_radius(world, incident.trigger).impacted)
 
     sim = world.fork()
-    propagate(sim, Event(incident.trigger, incident.event))
+    propagate(sim, Event(incident.trigger, incident.event), elapsed_s=incident.elapsed_s)
 
     cmp = Comparison(
         incident_id=incident.id, title=incident.title, structural_reach=reach

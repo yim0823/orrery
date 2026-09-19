@@ -42,10 +42,15 @@ def blast(entity_id: str, max_hops: int | None = None):
 
 
 @app.command()
-def simulate(entity_id: str, event: str = "down"):
-    """Apply an event and propagate consequences through behavior models (fork; does not persist)."""
+def simulate(entity_id: str, event: str = "down", elapsed_s: int | None = None):
+    """Apply an event and propagate consequences through behavior models (fork; does not persist).
+
+    --elapsed-s asks the question that actually pages people: not "what happens the moment
+    this dies" but "we have been down this long — what now?". Soft dependencies with a
+    declared tolerance turn hard once it is exceeded.
+    """
     w = _load().fork()
-    effects = propagate(w, Event(entity_id, event))
+    effects = propagate(w, Event(entity_id, event), elapsed_s=elapsed_s)
     for e in effects:
         st = e.status.value if e.status else "-"
         typer.echo(f"  {e.entity_id:<24} -> {st:<9} {e.note}")

@@ -1,0 +1,24 @@
+# Synthetic. Included because the engine still gets this one wrong.
+id: INC-0006
+title: "One node lost at peak; the survivor could not carry the traffic and fell over"
+occurred_at: "2026-09-11T20:48:00+09:00"
+world: world.yaml
+trigger: node-b1
+event: down
+observed:
+  svc-web: down          # one node left, and it could not take peak traffic alone
+  svc-inventory: up
+notes: |
+  Structurally the storefront survived: it still had somewhere to run, so the engine
+  predicts degraded. In reality the remaining node was already at 70% at peak, took the
+  whole load, and fell over inside two minutes.
+
+  This is a capacity question, and orrery models structure. Answering it would need
+  headroom per entity and a load model — which may not belong in a structural engine at
+  all. Recorded here so the limit is visible rather than discovered during an outage.
+
+  Checkout is deliberately absent. It runs elsewhere and nobody checked it during the
+  outage, so recording it either way would be inventing evidence.
+
+  Kept on purpose. A backtest of only the incidents the engine already handles
+  measures nothing.

@@ -13,8 +13,8 @@ def _world(resolver=None):
 
 def test_ingest_counts():
     w = _world()
-    assert len(w) == 17
-    assert len(w.relations()) == 21
+    assert len(w) == 18
+    assert len(w.relations()) == 24
 
 
 def test_blast_radius_site_kills_everything_hosted_there():
@@ -42,7 +42,7 @@ def test_resolver_proposes_and_confirmed_alias_merges():
     assert {"svc-inventory", "svc-inventory-prod"} <= ids
     w = _world(Resolver([Alias("svc-inventory", "svc-inventory-prod", confirmed_by="human")]))
     assert "svc-inventory-prod" not in w.g
-    assert len(w) == 16
+    assert len(w) == 17
 
 
 def test_fork_is_independent():

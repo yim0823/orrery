@@ -1,0 +1,25 @@
+# Synthetic. Included because the engine still gets this one wrong.
+id: INC-0005
+title: "Two of three etcd members lost; the cluster lost quorum and everything on it stopped"
+occurred_at: "2026-09-02T03:12:00+09:00"
+world: world.yaml
+trigger: site-a
+event: down
+observed:
+  host-a1: down
+  host-a2: down
+  node-a1: down
+  node-a2: down
+  etcd: down        # lost 2 of 3 members, so quorum is gone and the survivor is useless
+  node-b1: down     # in site-b and physically fine, but a cluster member without quorum
+  svc-web: down     # both nodes it runs on are gone
+notes: |
+  Two findings came out of this one.
+
+  Quorum: MEMBER_OF used to carry consequence only downward, so losing members never
+  touched the cluster, and node-b1 was predicted healthy while in reality a lone etcd
+  member without quorum is as useless as the two that are gone.
+
+  Survivor counting: the storefront was predicted degraded because `replicas: 3` said
+  so, even though both nodes it actually runs on were dead. The engine now counts
+  surviving places to run rather than trusting an attribute written down once.

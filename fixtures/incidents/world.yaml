@@ -166,6 +166,17 @@ entities:
     source: static_yaml
     source_id: fixtures/demo-world.yaml
   status: up
+- attrs:
+    members: 3
+    quorum: 2
+  id: etcd
+  kind: cluster
+  name: etcd (quorum 2 of 3)
+  provenance:
+  - observed_at: null
+    source: static_yaml
+    source_id: fixtures/demo-world.yaml
+  status: up
 relations:
 - attrs: {}
   dst: site-a
@@ -213,6 +224,15 @@ relations:
   src: node-a1
   strength: hard
 - attrs: {}
+  dst: etcd
+  kind: MEMBER_OF
+  provenance:
+  - observed_at: null
+    source: static_yaml
+    source_id: fixtures/demo-world.yaml
+  src: node-a1
+  strength: hard
+- attrs: {}
   dst: host-a2
   kind: RUNS_ON
   provenance:
@@ -231,6 +251,15 @@ relations:
   src: node-a2
   strength: hard
 - attrs: {}
+  dst: etcd
+  kind: MEMBER_OF
+  provenance:
+  - observed_at: null
+    source: static_yaml
+    source_id: fixtures/demo-world.yaml
+  src: node-a2
+  strength: hard
+- attrs: {}
   dst: host-b1
   kind: RUNS_ON
   provenance:
@@ -241,6 +270,15 @@ relations:
   strength: hard
 - attrs: {}
   dst: k8s-main
+  kind: MEMBER_OF
+  provenance:
+  - observed_at: null
+    source: static_yaml
+    source_id: fixtures/demo-world.yaml
+  src: node-b1
+  strength: hard
+- attrs: {}
+  dst: etcd
   kind: MEMBER_OF
   provenance:
   - observed_at: null
@@ -311,7 +349,8 @@ relations:
     source_id: fixtures/demo-world.yaml
   src: svc-checkout
   strength: hard
-- attrs: {}
+- attrs:
+    tolerance_s: 2400
   dst: ext-payments
   kind: DEPENDS_ON
   provenance:

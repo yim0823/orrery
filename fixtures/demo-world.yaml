@@ -17,6 +17,7 @@ entities:
   - {id: db-stock, kind: database, name: "stock", attrs: {engine: mysql, replica: false}}
   - {id: lb-edge, kind: load_balancer, name: "edge"}
   - {id: ext-payments, kind: external, name: "payments provider"}
+  - {id: etcd, kind: cluster, name: "etcd (quorum 2 of 3)", attrs: {quorum: 2, members: 3}}
 relations:
   - {src: host-a1, dst: site-a, kind: HOSTED_IN}
   - {src: host-a2, dst: site-a, kind: HOSTED_IN}
@@ -37,7 +38,10 @@ relations:
   - {src: svc-web, dst: svc-checkout, kind: DEPENDS_ON, strength: soft}
   - {src: svc-checkout, dst: db-orders, kind: DEPENDS_ON}
   - {src: svc-checkout, dst: svc-inventory, kind: DEPENDS_ON}
-  # checkout queues orders and retries when the payment provider is gone
-  - {src: svc-checkout, dst: ext-payments, kind: DEPENDS_ON, strength: soft}
+  # checkout queues orders and retries; the queue holds about forty minutes
+  - {src: svc-checkout, dst: ext-payments, kind: DEPENDS_ON, strength: soft, attrs: {tolerance_s: 2400}}
   - {src: svc-inventory, dst: db-stock, kind: DEPENDS_ON}
+  - {src: node-a1, dst: etcd, kind: MEMBER_OF}
+  - {src: node-a2, dst: etcd, kind: MEMBER_OF}
+  - {src: node-b1, dst: etcd, kind: MEMBER_OF}
   - {src: svc-web, dst: lb-edge, kind: MEMBER_OF}

@@ -5,6 +5,7 @@ occurred_at: "2026-08-08T11:20:00+09:00"
 world: world.yaml
 trigger: ext-payments
 event: down
+elapsed_s: 14400    # four hours; past the forty-minute queue
 observed:
   svc-checkout: down      # degraded for ~40 minutes, then the queue filled
   svc-web: degraded
@@ -14,6 +15,6 @@ notes: |
   A soft dependency is soft up to a point: checkout queued and retried, then ran out of
   room and stopped accepting orders.
 
-  propagate() has no time dimension, so it cannot express "soft for 40 minutes, hard
-  after that". It predicts degraded and is understated here. Kept on purpose — a
-  backtest of only the incidents the engine already handles measures nothing.
+  The relation declares tolerance_s: 2400, so past forty minutes the engine treats the
+  edge as hard. This pair is the argument for putting a clock in the model at all: one
+  trigger, two truths, and only the duration tells them apart.

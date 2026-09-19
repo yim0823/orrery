@@ -37,6 +37,14 @@ class Incident(BaseModel):
     event: str = "down"
     """The event applied to the trigger. Matches the names behavior models react to."""
 
+    elapsed_s: int | None = None
+    """How long the failure had been going on when these statuses were observed.
+
+    A postmortem describes a moment, and which moment matters: a soft dependency that
+    was survivable at ten minutes may not be at four hours. Leave it out for incidents
+    where duration did not change the outcome.
+    """
+
     observed: dict[str, Status] = Field(default_factory=dict)
     """Entity id -> the status it was actually in. Ground truth."""
 

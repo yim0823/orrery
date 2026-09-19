@@ -37,7 +37,7 @@ def test_loads_incident_and_resolves_world_relative_to_the_record():
 def test_load_dir_skips_the_world_snapshot():
     incidents = Incident.load_dir(FIXTURES)
     ids = [i.id for i in incidents]
-    assert ids == ["INC-0001", "INC-0002", "INC-0003", "INC-0004"]
+    assert ids == ["INC-0001", "INC-0002", "INC-0003", "INC-0004", "INC-0005", "INC-0006"]
 
 
 def test_replay_scores_only_observed_entities_by_default():
@@ -76,15 +76,34 @@ def test_soft_dependency_is_now_handled():
     assert checkout.outcome is Outcome.HIT
 
 
+def test_the_clock_separates_two_incidents_with_one_trigger():
+    # Same failure, ten minutes versus four hours, opposite outcomes. This pair is the
+    # whole argument for putting a clock in the model.
+    short = replay(Incident.load(FIXTURES / "INC-0003.yaml"))
+    long_ = replay(Incident.load(FIXTURES / "INC-0004.yaml"))
+    a = next(j for j in short.judgements if j.entity_id == "svc-checkout")
+    b = next(j for j in long_.judgements if j.entity_id == "svc-checkout")
+    assert (a.predicted, b.predicted) == (Status.DEGRADED, Status.DOWN)
+    assert a.outcome is Outcome.HIT and b.outcome is Outcome.HIT
+
+
+def test_quorum_loss_takes_the_survivors_with_it():
+    cmp = replay(Incident.load(FIXTURES / "INC-0005.yaml"))
+    # node-b1 was physically untouched in another site; without quorum it is still useless
+    survivor = next(j for j in cmp.judgements if j.entity_id == "node-b1")
+    assert survivor.predicted is Status.DOWN
+    assert survivor.outcome is Outcome.HIT
+
+
 def test_known_engine_gap_stays_visible():
-    # INC-0004 is the gap that remains: a soft dependency is soft only for a while, and
-    # propagate() has no time dimension. If this ever becomes a HIT, the engine learned
-    # something — update the fixture rather than deleting the test.
-    cmp = replay(Incident.load(FIXTURES / "INC-0004.yaml"))
-    checkout = next(j for j in cmp.judgements if j.entity_id == "svc-checkout")
-    assert checkout.actual is Status.DOWN
-    assert checkout.predicted is Status.DEGRADED
-    assert checkout.outcome is Outcome.UNDERSTATED
+    # INC-0006 is the gap that remains: the engine counts surviving places to run, but
+    # not whether the survivors can carry the load. If this ever becomes a HIT, the
+    # engine learned something — update the fixture rather than deleting the test.
+    cmp = replay(Incident.load(FIXTURES / "INC-0006.yaml"))
+    web = next(j for j in cmp.judgements if j.entity_id == "svc-web")
+    assert web.actual is Status.DOWN
+    assert web.predicted is Status.DEGRADED
+    assert web.outcome is Outcome.UNDERSTATED
 
 
 def test_no_misses_on_the_demo_fixtures():

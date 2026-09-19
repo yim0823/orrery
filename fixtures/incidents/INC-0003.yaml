@@ -5,12 +5,11 @@ occurred_at: "2026-06-21T19:15:00+09:00"
 world: world.yaml
 trigger: ext-payments
 event: down
+elapsed_s: 600      # ten minutes in; the retry queue had room
 observed:
   svc-checkout: degraded   # queued payments and kept the cart working
   svc-web: degraded
   svc-inventory: up
 notes: |
   Checkout treats the payment provider as a soft dependency: it queues and retries.
-  The engine has no notion of a soft dependency, so it predicts checkout is down.
-  Left in on purpose — a backtest that only contains incidents the engine already
-  handles measures nothing.
+  Paired with INC-0004, which is the same failure left running four hours.
