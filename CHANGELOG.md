@@ -77,6 +77,14 @@ Four defects in propagation, three of them found by the backtest harness on its 
   and keeps private copies only of what it damages. `fork(deep=True)` for full isolation.
 - English is the primary language for documentation; Korean versions live alongside.
 
+### Fixed on a fresh clone
+
+- `uv sync` did not install the test dependencies, so `uv run pytest` failed for anyone
+  following the contributing guide while passing for everyone who already had an
+  environment. Dev dependencies moved to a `[dependency-groups]` entry, which a plain
+  sync installs. `scripts/smoke.sh` now runs the documented setup end to end in CI, so
+  this class of breakage is caught by the build rather than by a new contributor.
+
 ### Known limits
 
 - **Capacity is not modeled.** The engine knows whether somewhere is left to run, not

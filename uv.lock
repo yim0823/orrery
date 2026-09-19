@@ -3,7 +3,7 @@ revision = 3
 requires-python = ">=3.12"
 
 [options]
-exclude-newer = "2026-09-12T10:16:00.59055Z"
+exclude-newer = "2026-09-12T10:24:22.629249Z"
 exclude-newer-span = "P7D"
 
 [[package]]
@@ -97,12 +97,14 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+neo4j = [
+    { name = "neo4j" },
+]
+
+[package.dev-dependencies]
 dev = [
     { name = "pytest" },
     { name = "ruff" },
-]
-neo4j = [
-    { name = "neo4j" },
 ]
 
 [package.metadata]
@@ -110,13 +112,17 @@ requires-dist = [
     { name = "neo4j", marker = "extra == 'neo4j'", specifier = ">=5.20" },
     { name = "networkx", specifier = ">=3.3" },
     { name = "pydantic", specifier = ">=2.7" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.2" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.5" },
     { name = "simpy", specifier = ">=4.1" },
     { name = "typer", specifier = ">=0.12" },
 ]
-provides-extras = ["neo4j", "dev"]
+provides-extras = ["neo4j"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8.2" },
+    { name = "ruff", specifier = ">=0.5" },
+]
 
 [[package]]
 name = "packaging"

@@ -34,7 +34,7 @@ orrery never depends on it.
 ## Development
 
 ```bash
-uv sync --all-extras --dev
+uv sync
 uv run pytest            # 15 tests
 uv run ruff check .
 ```

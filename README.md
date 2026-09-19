@@ -324,7 +324,7 @@ Issues and pull requests are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING
 first — in particular the clean-room rule, which is enforced by a commit hook.
 
 ```bash
-uv sync --all-extras --dev
+uv sync
 uv run pytest
 uv run ruff check .
 ```

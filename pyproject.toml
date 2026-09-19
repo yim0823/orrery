@@ -25,6 +25,10 @@ dependencies = [
 
 [project.optional-dependencies]
 neo4j = ["neo4j>=5.20"]
+
+# A plain `uv sync` installs these, so `uv run pytest` works on a fresh clone without
+# anyone having to read a flag out of the contributing guide first.
+[dependency-groups]
 dev = ["pytest>=8.2", "ruff>=0.5"]
 
 [project.urls]
