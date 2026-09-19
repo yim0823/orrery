@@ -34,6 +34,21 @@ this section of the file will say so when they do.
   how to build the second without instrumenting every service. `docs/ARCHITECTURE.md`
   gained a section on the map audit (`check`, `spof`), which was undocumented.
 
+- **`LICENSE` names a copyright holder, and `NOTICE` says what that claim rests on.**
+  The licence text shipped with `Copyright [yyyy] [name of copyright owner]` still in it,
+  which is not a small omission: a licence with no named licensor grants nothing, so the
+  most carefully written disclosure in the README sat on top of a grant that was blank.
+  The new `NOTICE` names the author, names the two commits authored on employer
+  equipment, and — the part that was missing everywhere — says what the unsettled
+  ownership means **for a reader** rather than for the author: a challenge would reach
+  whatever they built on this, because a derivative work inherits the defect in its
+  licence chain, and there is no indemnity on offer.
+- **The CI badge advertised a build nobody but the author can see.** The repository is
+  private while licensing is open, so the badge resolved to a 404 for every reader, and
+  so did the `git clone` line directly under it. Both READMEs now say the repository is
+  private, say why, and point at the workflow file and `scripts/smoke.sh` instead of at a
+  green square only one person can load.
+
 ### Fixed
 
 - **The reason column could contradict the status beside it.** `orrery simulate rack-a1`

@@ -2,10 +2,19 @@
 
 <h1>orrery</h1>
 
-[![CI](https://github.com/yim0823/orrery/actions/workflows/ci.yml/badge.svg)](https://github.com/yim0823/orrery/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-blue.svg)](pyproject.toml)
 [![Status](https://img.shields.io/badge/status-early--alpha-orange.svg)](#project-status)
+
+> 🔒 **This repository is private while the licensing question below is open.** If you
+> are reading this without access to it, the clone line will not work for you and there
+> is nothing you can do about that yet — that is the state of the project, not a broken
+> link. There is no CI badge here for the same reason: a badge that only the author can
+> resolve advertises a green build nobody else can check. CI runs on every push — lint,
+> tests on 3.12 and 3.13, a fresh-clone smoke run, and three checks that the documentation
+> has not drifted from the tool (its command output, its mermaid diagrams, its internal
+> links). [`.github/workflows/ci.yml`](.github/workflows/ci.yml) is in the repository, and
+> `bash scripts/smoke.sh` runs most of it locally.
 
 **orrery computes what else fails when one thing in your infrastructure does.**
 
@@ -69,7 +78,7 @@ stock database went with the host."*
 Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 
 ```bash
-git clone https://github.com/yim0823/orrery && cd orrery
+git clone https://github.com/yim0823/orrery && cd orrery   # private, for now
 uv sync
 uv run orrery ingest fixtures/demo-world.yaml
 uv run orrery blast site-a
@@ -431,11 +440,21 @@ than be right about that.
 
 Early alpha, `0.3.0`. Honest picture:
 
-**Licensing.** The first two commits were authored on employer equipment under an
-employer account. Code is copyright rather than patent, and work-for-hire rules are
-stricter than most people expect, so the author's right to grant this licence is not
-settled in writing yet. Nothing here is company-specific and a commit hook enforces that,
-but if you need a clean provenance chain, this is not yet it.
+**Licensing.** The first two commits — `24f3d50` and `679d332`, both on 2026-09-12 —
+were authored on employer equipment under an employer account. Everything since was
+written on personal equipment. Nothing here is company-specific and a fail-closed commit
+hook enforces that, but copyright is not about confidentiality: work-for-hire rules are
+broader than most people expect and can attach to code written on an employer's machine
+whatever its subject. The author believes this is his to license and [`NOTICE`](NOTICE)
+says so by name, because a licence with no named licensor grants nothing. **The employer
+has not confirmed it in writing.**
+
+What that means for you, rather than for the author: if ownership were asserted, the
+Apache-2.0 grant over the affected material could be challenged, and the challenge would
+reach whatever you built on top of this, since a derivative work inherits the defect in
+its licence chain. There is no indemnity on offer. If your legal review needs a clean
+provenance chain, this does not have one yet — [`NOTICE`](NOTICE) has the full statement,
+and it is the file that will change first when the position does.
 
 | Works | Not yet |
 |---|---|

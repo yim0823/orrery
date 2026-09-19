@@ -1,0 +1,35 @@
+orrery
+Copyright 2026 TaeHyoung Yim
+
+Licensed under the Apache License, Version 2.0. See LICENSE.
+
+--------------------------------------------------------------------------------
+
+A caveat on that attribution, stated here rather than left for you to discover.
+
+The first two commits in this repository were authored on employer equipment under
+an employer account, on 2026-09-12. Everything since was written on personal
+equipment under a personal account. No employer's confidential information is in
+this repository: nothing here names or describes any internal system, and a
+fail-closed commit hook refuses to commit anything that does (see CLEANROOM.md).
+
+Copyright, however, is not about confidentiality. Work-for-hire rules in most
+jurisdictions are broader than people expect, and they can attach to code written
+on an employer's equipment regardless of its subject. The author believes this work
+is his to license and has attributed it accordingly above, because a licence with no
+named licensor grants nothing at all. That belief has not been confirmed in writing
+by the employer.
+
+What that means for you, concretely:
+
+  - If the employer asserted ownership of those first two commits, the Apache-2.0
+    grant over the affected material could be challenged.
+  - A challenge would reach not only this repository but anything you built on top
+    of it, because a derivative work inherits the defect in its licence chain.
+  - The author has no indemnity to offer you. This project is early alpha software
+    distributed AS IS, and that disclaimer covers this risk as much as any bug.
+
+So: if you are evaluating this for a company, and your legal review requires a clean
+provenance chain, this does not have one yet. Wait. The state of it will be recorded
+here and in the project status section of README.md, and the two commits concerned
+are 24f3d50 and 679d332 if you want to look at what they contain.
