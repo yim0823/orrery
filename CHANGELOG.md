@@ -83,7 +83,9 @@ this section of the file will say so when they do.
   had to be read by hand.
 - **`docs/ADOPTING.md` told readers to install someone else's package.**
   `dependencies = ["orrery>=0.1"]` — `orrery` on PyPI is an unrelated project and this one
-  is unpublished. It now shows a pinned git dependency and says why.
+  is unpublished. It now shows a git dependency pinned to a commit, which resolves by URL
+  rather than by name and so is unaffected by whatever the distribution ends up being
+  called.
 - **The Korean README's modelling example did not ingest** (a missing `name`, a relation
   to an entity that was never declared) and taught `replicas` / `replica: true`, which the
   English copy explicitly tells you not to write. It also claimed four of the five

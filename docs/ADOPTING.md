@@ -12,7 +12,7 @@ The instinct is to fork. Resist it for as long as you can.
 
 | | Depend | Fork |
 |---|---|---|
-| Upgrades | `uv lock --upgrade-package orrery-sim` | merge conflicts forever |
+| Upgrades | `uv lock --upgrade-package orrery` | merge conflicts forever |
 | Your connectors | live in your repo either way | live in your repo either way |
 | Behavior models | subclass or replace at runtime | ditto |
 | Clean-room | enforced by the boundary | you have to remember |
@@ -26,17 +26,19 @@ itself works, and when you do, send the change back rather than carrying it.
 # your-repo/pyproject.toml
 [project]
 dependencies = [
-  "orrery-sim @ git+https://github.com/yim0823/orrery@<commit-sha>",
+  "orrery @ git+https://github.com/yim0823/orrery@<commit-sha>",
 ]
 ```
 
-⚠️ **This is not on PyPI, and the name `orrery` there belongs to an unrelated project.**
-Writing `dependencies = ["orrery"]` installs somebody else's package. Until this one is
-published — which is blocked on the licensing question in the README's project status —
-depend on it by git reference, pinned to a commit.
+⚠️ **This is not on PyPI, and `orrery` there is an unrelated project** (an MVC/observer
+framework, last released 2025). A direct URL reference like the one above does not consult
+PyPI at all, so it installs the right thing — but `dependencies = ["orrery"]` without the
+URL installs somebody else's package. Publishing here is blocked on the licensing question
+in the README's project status, and whatever distribution name that eventually takes, the
+git reference above keeps working.
 
-Pin it. An engine that decides what is safe to restart is not a dependency you want
-floating.
+Pin it to a commit. An engine that decides what is safe to restart is not a dependency you
+want floating.
 
 ---
 
