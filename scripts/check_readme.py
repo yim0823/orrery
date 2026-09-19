@@ -16,12 +16,19 @@ CHECKS = [
     (["spof", "--limit", "5"], "$ orrery spof --limit 5"),
     (["check"], "$ orrery check"),
     (["resolve", "fixtures/demo-world.yaml"], "$ orrery resolve fixtures/demo-world.yaml"),
+    (["simulate", "ext-payments"], "$ orrery simulate ext-payments\n"),
+    (
+        ["simulate", "ext-payments", "--elapsed-s", "14400"],
+        "$ orrery simulate ext-payments --elapsed-s 14400",
+    ),
 ]
 
-# Every README, not just the English one. The translation is the copy that drifts, because
-# nobody rereads it when the tool changes: README.ko.md spent two releases explaining
-# `simulate` by replica counts the engine had stopped reading.
-READMES = ["README.md", "README.ko.md"]
+# Every page that shows output, not the English README only. The translation is the copy
+# that drifts, because nobody rereads it when the tool changes: README.ko.md spent two
+# releases explaining `simulate` by replica counts the engine had stopped reading. The
+# architecture document drifted the same way, for the same reason — its propagation
+# section documented identifiers that had not existed for two releases.
+READMES = ["README.md", "README.ko.md", "docs/ARCHITECTURE.md", "docs/ARCHITECTURE.ko.md"]
 
 
 def block_after(readme: str, marker: str) -> list[str]:
@@ -57,10 +64,10 @@ def main() -> int:
                 )
     # An example the English README has and the translation does not is fine. An example
     # nobody has is how the check quietly stops checking anything.
-    english = pathlib.Path("README.md").read_text(encoding="utf-8")
+    english = "".join(pathlib.Path(n).read_text(encoding="utf-8") for n in READMES)
     for _, marker in CHECKS:
         if marker not in english:
-            failures.append(f"{marker!r} is not in README.md any more")
+            failures.append(f"{marker!r} is in none of {', '.join(READMES)} any more")
     if failures:
         print("README example output is stale:\n")
         print("\n\n".join(failures))

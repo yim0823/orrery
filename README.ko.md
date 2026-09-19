@@ -53,7 +53,7 @@ $ orrery simulate host-a1
 ## 5분 만에 직접 해보기
 
 ```bash
-git clone <this repo> && cd orrery
+git clone https://github.com/yim0823/orrery && cd orrery
 uv sync
 uv run orrery ingest fixtures/demo-world.yaml
 uv run orrery blast site-a
@@ -66,16 +66,28 @@ DB 2개로 된 작은 가상 회사이고 실제 어느 회사와도 무관합�
 
 ```yaml
 entities:
-  - {id: host-a1, kind: host, name: "a1"}
-  - {id: svc-checkout, kind: service, name: "checkout", attrs: {replicas: 2}}
-  - {id: db-orders, kind: database, attrs: {engine: postgres, replica: true}}
+  - {id: host-a1,      kind: host,     name: "a1"}
+  - {id: node-a1,      kind: node,     name: "node-a1"}
+  - {id: svc-checkout, kind: service,  name: "checkout"}
+  - {id: db-orders,    kind: database, name: "orders"}
 
 relations:
-  - {src: node-a1, dst: host-a1, kind: RUNS_ON}
+  - {src: node-a1,      dst: host-a1,   kind: RUNS_ON}
+  - {src: svc-checkout, dst: node-a1,   kind: RUNS_ON}
+  - {src: db-orders,    dst: host-a1,   kind: RUNS_ON}
   - {src: svc-checkout, dst: db-orders, kind: DEPENDS_ON}
 ```
 
-**개체**와 **관계** 둘뿐입니다. 관계는 다섯 종류입니다.
+`relations`에 쓴 id는 `entities`에 이미 있어야 합니다. 적재는 한쪽 끝이 없는 관계를 보면
+없는 쪽을 지어내지 않고 **거부합니다.**
+
+여기 **없는 것**을 보세요. `replicas`도 `replica: true`도 없습니다.
+**이중화는 적어 놓는 숫자가 아니라 돌 자리입니다.** `RUNS_ON`이 셋인 서비스는 하나를 잃어도
+살고, `replicas: 3`에 `RUNS_ON`이 하나인 서비스는 죽습니다. 그리고 `orrery check`가
+둘 중 어느 쪽을 만들었는지 말해 줍니다.
+
+**개체**와 **관계** 둘뿐입니다. 관계는 다섯 종류이고, 화살표는 **언제나 의존하는 쪽에서
+의존받는 쪽으로** 향합니다 — 하나만 뒤집어도 영향 범위가 조용히 틀립니다.
 
 | 관계 | 읽는 법 | 예 |
 |---|---|---|
@@ -83,9 +95,15 @@ relations:
 | `HOSTED_IN` | A가 B 안에 놓여 있다 | 서버가 랙 안에, 랙이 IDC 안에 |
 | `MEMBER_OF` | A가 B의 구성원이다 | 노드가 클러스터의 |
 | `DEPENDS_ON` | A가 B를 필요로 한다 | 서비스가 DB를 |
-| `CONNECTS_TO` | A가 B와 통신한다 | 네트워크 경로 |
+| `CONNECTS_TO` | A가 B에 물려 있다 | 서버가 네트워크 대역에 |
 
-앞의 넷이 영향 전파 경로입니다. B가 죽으면 B를 가리키는 A들이 영향을 받습니다.
+**다섯 모두 영향을 전파합니다.** B가 죽으면 B를 가리키는 A들이 영향을 받습니다.
+한동안 `CONNECTS_TO`만 빠져 있었고, 그래서 네트워크 대역 장애가 아무것에도 영향이 없는
+것으로 계산됐습니다 — 0.2.0에서 고쳤습니다.
+
+개체 종류는 열일곱 가지입니다(`orrery ingest`에 오타를 내면 전부 나열해 줍니다).
+데모에 나오는 것은 `site`, `rack`, `host`, `vm`, `cluster`, `node`, `service`,
+`database`, `load_balancer`, `external`입니다.
 
 ### 명령
 
@@ -157,7 +175,7 @@ isolated (1)
 
 ```mermaid
 flowchart TB
-  subgraph call["호출 층 — 누가 누구를 부르나"]
+  subgraph calls["호출 층 — 누가 누구를 부르나"]
     direction LR
     web["웹 프론트"] -->|DEPENDS_ON| checkout["체크아웃"]
     checkout -->|DEPENDS_ON| inventory["재고"]
@@ -174,7 +192,7 @@ flowchart TB
     node -->|MEMBER_OF| cluster["클러스터"]
   end
 
-  call -.->|"RUNS_ON: 서비스가 노드 위에서 돈다"| infra
+  calls -.->|"RUNS_ON: 서비스가 노드 위에서 돈다"| infra
 ```
 
 | | 인프라 층 | 호출 층 |
@@ -268,6 +286,52 @@ A의 서비스가 재고 서비스를 DEPENDS_ON 한다
 
 ---
 
+## 하드 의존과 소프트 의존
+
+의존한다고 다 떠받치고 있는 건 아닙니다. 주 데이터베이스를 잃으면 멈춥니다. 결제 대행을 잃어도
+큐에 쌓고 재시도한다면 주문은 계속 받습니다 — 장바구니는 돌고, 확정만 늦어집니다.
+
+```yaml
+relations:
+  - {src: svc-checkout, dst: db-orders,    kind: DEPENDS_ON}                   # 하드
+  - {src: svc-checkout, dst: ext-payments, kind: DEPENDS_ON, strength: soft}
+```
+
+소프트 간선은 **건너오는 것을 "저하"에서 자릅니다.** 결과를 약하게 만들 뿐 없애지는 않습니다.
+체크아웃이 느린 웹 프론트는 그 자신도 느립니다. 처음 구현에서는 소프트 간선이 저하를 **완전히
+삼키게** 했는데, 백테스트가 **놓침(MISS)** 2건으로 반박했습니다. 놓침은 — 깨진 것을 멀쩡하다고
+말하는 것은 — 사람을 다치게 하는 오류입니다.
+
+`strength`의 기본값이 `hard`인 것도 일부러입니다. 아닌 것을 soft로 찍으면 진짜 장애를 숨기고,
+아닌 것을 hard로 찍으면 헛경보가 납니다. 앞쪽은 사람을 다치게 하고 뒤쪽은 짜증나게 합니다.
+애매하면 hard로 두십시오.
+
+### 소프트는 한동안만 소프트입니다
+
+`orrery simulate <id> --elapsed-s <초>`는 그 장애가 얼마나 오래됐는지를 받습니다. 관계가
+`attrs`에 `tolerance_s`를 선언하면, 그 시간을 넘은 순간부터 그 간선은 하드처럼 취급됩니다.
+
+```
+$ orrery simulate ext-payments
+  ext-payments             -> down      passthrough
+  svc-checkout             -> degraded  dep degraded
+  svc-web                  -> degraded  dep degraded
+```
+
+```
+$ orrery simulate ext-payments --elapsed-s 14400
+  ext-payments             -> down      passthrough
+  svc-checkout             -> down      hard dep down
+  svc-web                  -> degraded  dep degraded
+```
+
+트리거는 하나인데 답이 둘이고, 둘을 가르는 것은 **지속 시간뿐**입니다. 체크아웃은 결제를 큐에
+쌓고 재시도하지만, 큐가 차면 주문을 그만 받습니다. **기본 유예 시간은 없습니다** — 선언하지
+않은 관계는 원하는 만큼 소프트로 남습니다. 한 시간 같은 기본값을 두면 긴 장애에서 모든 소프트
+간선이 조용히 하드가 되는데, 엔진에는 그렇게 주장할 근거가 없습니다.
+
+---
+
 ## 내 인프라를 넣으려면
 
 지도가 없으면 아무 답도 못 합니다. 그래서 데이터를 넣는 게 전부인데, 여기가 실제로 어려운 부분입니다.
@@ -275,8 +339,8 @@ A의 서비스가 재고 서비스를 DEPENDS_ON 한다
 **커넥터를 직접 씁니다.** orrery는 커넥터 인터페이스만 정의하고, 실제 시스템에 붙는 코드는 각자의 리포에 둡니다. 회사마다 CMDB도 다르고 모니터링도 다르기 때문입니다.
 
 ```python
-from orrery.connectors.base import Connector, Discovery
-from orrery.schema import Entity, Relation, EntityKind, RelationKind
+from orrery.connectors.base import Discovery
+from orrery.schema import Entity, Relation, EntityKind, RelationKind, Provenance
 
 class MyCmdbConnector:
     name = "mycmdb"
@@ -287,10 +351,14 @@ class MyCmdbConnector:
             d.entities.append(Entity(
                 id=f"host-{row['id']}", kind=EntityKind.HOST, name=row["hostname"],
                 attrs={"ip": row["ip"], "env": row["env"]},
+                # 출처를 안 적으면 두 시스템이 다른 말을 할 때 어느 쪽을 믿을지 판단할 수
+                # 없습니다. `orrery check`가 `no provenance`로 바로 잡아냅니다.
+                provenance=[Provenance(source="mycmdb", source_id=row["id"])],
             ))
             d.relations.append(Relation(
                 src=f"host-{row['id']}", dst=f"site-{row['idc']}",
                 kind=RelationKind.HOSTED_IN,
+                provenance=[Provenance(source="mycmdb", source_id=row["id"])],
             ))
         return d
 ```
@@ -319,7 +387,7 @@ candidate: svc-inventory (inventory) | svc-inventory-prod (inventory-prod)
 
 ## 쓰게 되는 순간들
 
-**변경 전.** 이 서버를 리부팅하려는데 승인 화면에 영향 범위가 뜹니다. "5개 영향, 그중 체크아웃은 복제본 부족으로 다운."
+**변경 전.** 이 서버를 리부팅하려는데 승인 화면에 영향 범위가 뜹니다. "5개 영향, 그중 체크아웃은 재고 DB가 같이 죽어서 다운."
 
 **장애 중.** 데이터베이스가 죽었습니다. 무엇부터 확인해야 하는지 홉 순서로 나옵니다.
 
@@ -331,7 +399,7 @@ candidate: svc-inventory (inventory) | svc-inventory-prod (inventory-prod)
 
 ## 현재 상태
 
-초기 알파, `0.3.0`. 테스트 238개 통과. 정직하게 말하면 이렇습니다.
+초기 알파, `0.3.0`. 정직하게 말하면 이렇습니다.
 
 **라이선스.** 첫 두 커밋이 회사 장비의 회사 계정으로 작성됐습니다. 사내 정보는 하나도 들어 있지
 않고 커밋 훅이 그걸 막지만, 저작권 귀속이 문서로 정리되기 전까지 **출처가 깨끗한 사슬이
@@ -349,10 +417,12 @@ candidate: svc-inventory (inventory) | svc-inventory-prod (inventory-prod)
 
 **가장 큰 미해결 문제는 여전히 정확도이고, 그걸 재는 일을 아무도 안 합니다.**
 
-지도를 그려 주는 도구는 많습니다. 2026년 기준으로 CMDB·애플리케이션 의존성 매핑 제품,
-관측 도구의 서비스 맵, 카오스 플랫폼, 개발자 포털을 훑어봤지만 **자기 지도를 과거 장애에 대고
-채점하는 것은 하나도 없습니다.** 이 하네스가 하는 일이 그것이고, **채점 대상이 orrery의 지도일
-필요가 없습니다.** `orrery.adapters.neo4j`를 이미 돌리고 있는 그래프에 붙이고, 스냅샷을 저장하고,
+지도를 그려 주는 도구는 많고, 그중 몇몇은 이것보다 잘 그립니다. 2026년 기준으로 CMDB·애플리케이션
+의존성 매핑 제품, 관측 도구의 서비스 맵, 카오스 플랫폼, 개발자 포털을 훑어봤지만 **자기 지도를 과거
+장애에 대고 채점하는 것은 찾지 못했습니다.** **이건 조사이지 증명이 아니고**, 이 프로젝트가 가장
+크게 걸고 있는 주장입니다 — 쓰고 계신 도구가 이걸 한다면 정직한 선택은 그 도구를 쓰고 이 페이지를
+닫는 겁니다. 이 하네스가 하는 일은 지도를 채점하는 것이고, **채점 대상이 orrery의 지도일 필요가
+없습니다.** `orrery.adapters.neo4j`를 이미 돌리고 있는 그래프에 붙이고, 스냅샷을 저장하고,
 장애 기록을 그 위에 쓰면 채점되는 것은 당신이 갖고 있던 지도입니다.
 
 ```

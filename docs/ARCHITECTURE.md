@@ -22,7 +22,11 @@ flowchart LR
     R -->|a human confirms| W[(World<br/>graph)]
     W --> B[blast_radius<br/>structural range]
     W --> P[propagate<br/>behavioral result]
-    P --> S[scoring<br/>four-axis rubric]
+    W --> A[audit<br/>check · spof]
+    W --> DF[diff<br/>drift between snapshots]
+    P --> BT[backtest<br/>score against past incidents]
+    P --> SC[scenarios<br/>break it, hand an agent its tools]
+    SC --> S[scoring<br/>four-axis rubric]
   end
   C1 --> D
   C2 --> D
@@ -62,9 +66,9 @@ flowchart TB
 
   subgraph layers["The map"]
     direction TB
-    call["Call layer — DEPENDS_ON<br/>who talks to whom"]
+    calls["Call layer — DEPENDS_ON<br/>who talks to whom"]
     infra["Infrastructure layer<br/>RUNS_ON · HOSTED_IN · MEMBER_OF · CONNECTS_TO<br/>what sits on what"]
-    call -->|joins on identity| infra
+    calls -->|joins on identity| infra
   end
 
   subgraph answers["What the engine computes"]
@@ -77,8 +81,8 @@ flowchart TB
   end
 
   cmdb --> infra
-  flows --> call
-  traces --> call
+  flows --> calls
+  traces --> calls
   layers --> answers
 ```
 
@@ -106,8 +110,10 @@ Three ways exist, and they are not equally available:
 | eBPF — Pixie, SkyWalking Rover, Hubble | no | Kubernetes-shaped; kernel requirements; an agent per node |
 | Connection observation — flow logs, firewall logs, socket tables | **no** | Coarse: `host A → host B:9000`, not which endpoint. Traffic that never crosses an observation point is invisible. |
 
-Most tools in this space assume the first, which is why they work beautifully on a
-green-field Kubernetes estate and barely at all on one that grew over fifteen years.
+The tools we looked at assume the first, which is why they work beautifully on a
+green-field Kubernetes estate and barely at all on one that grew over fifteen years. That
+is an observation from a survey, not a proof; if you know one that does the third, it is
+worth telling us, because it would be a better starting point than this.
 
 The third builds a usable call layer by joining two facts, neither of which requires
 touching an application:
@@ -164,8 +170,9 @@ up fitting none of them.
 ```python
 class Entity(BaseModel):
     id: str
-    kind: EntityKind          # site, rack, host, vm, cluster, node, service,
-                              # database, load_balancer, network_segment, external
+    kind: EntityKind          # seventeen of them: site, rack, host, vm, cluster, node,
+                              # service, database, queue, storage, load_balancer, dns,
+                              # certificate, cdn, job, network_segment, external
     name: str
     status: Status = UP       # up | degraded | down | unknown
     attrs: dict[str, Any]     # kind-specific fields go here
@@ -184,8 +191,9 @@ class Relation(BaseModel):
 
 **`attrs` is free-form.** Replica counts, database engines, site codes all live there. The
 schema does not grow until a behavior model needs a field to be first-class. There is a
-price: typos pass silently. Write `replica` where you meant `replicas` and the default of
-1 applies and nobody finds out. Validate in your connector.
+price: typos pass silently. Nothing in propagation reads `replicas` any more — it counts
+places instead — but `check` does, so `replica` where you meant `replicas` costs you the
+`redundancy on paper only` finding and nobody is told. Validate in your connector.
 
 **`provenance` is close to mandatory.** Without a record of which connector saw this fact
 and when, you cannot adjudicate between two systems that disagree. A map is trusted
@@ -201,14 +209,17 @@ arrow points from the thing that depends to the thing depended upon.**
 
 | Relation | src | dst | Reads as |
 |---|---|---|---|
-| `RUNS_ON` | service | node | the service **runs on** the node |
-| `HOSTED_IN` | host | site | the host **sits in** the site |
+| `RUNS_ON` | service | node | the service **runs on** the node; a node on a vm, a vm on a host |
+| `HOSTED_IN` | host | rack | the host **sits in** the rack; a rack in a site |
 | `MEMBER_OF` | node | cluster | the node **belongs to** the cluster |
 | `DEPENDS_ON` | service | database | the service **needs** the database |
 | `CONNECTS_TO` | host | network segment | the host **talks to** the segment |
 
-`CONNECTS_TO` is the only one not used for impact propagation. Communication is symmetric,
-so it does not imply "if A dies, B dies".
+**All five propagate impact.** `CONNECTS_TO` was left out of the walk for a release, on the
+reasoning that communication is symmetric — which made a whole class of outage, a VLAN or a
+top-of-rack switch, compute as affecting nothing. A host attached to a segment does depend
+on that segment. 0.2.0 fixed it, and `blast` and `simulate` now read the same edge list
+rather than each keeping its own.
 
 ---
 
@@ -220,10 +231,11 @@ so it does not imply "if A dies, B dies".
 walk over incoming edges.
 
 ```python
-_IMPACT_EDGES = (RUNS_ON, HOSTED_IN, MEMBER_OF, DEPENDS_ON)
-
 def blast_radius(world, root, max_hops=None) -> BlastRadius
 ```
+
+The edge list is not query.py's own: `_impact_edges()` returns propagation's
+`_DEPENDENT_EDGES`, so the two commands cannot drift apart again.
 
 It returns a **hop distance** and a **path** for each entity in range. The path is the part
 that matters. "checkout is affected" is not something a person can act on. Show
@@ -231,7 +243,7 @@ that matters. "checkout is affected" is not something a person can act on. Show
 with it.
 
 **Complexity is O(V+E)** over an in-memory graph. Real timings are in
-[§13 Performance](#13-performance); the short version is tens of milliseconds at 25k
+[§14 Performance](#14-performance); the short version is tens of milliseconds at 25k
 entities and a few hundred at 127k, not the "milliseconds" this used to claim. Past that,
 change the storage — and when you do, still do not give orrery a store of its own. Compute
 over the graph database you already run.
@@ -277,24 +289,29 @@ class ServiceModel:
     kind = EntityKind.SERVICE
 
     def react(self, entity, event):
-        replicas = int(entity.attrs.get("replicas", 1))
         if event in ("down", "dependency_down"):
             return Effect(entity.id, DOWN, emit=["dependency_down"], note="hard dep down")
-        if event == "dependency_degraded":
+        if event == "place_lost":
+            # propagate already counted and found somewhere still standing
+            return Effect(entity.id, DEGRADED, emit=["dependency_degraded"],
+                          note="lost one of its places to run")
+        if event in ("degraded", "dependency_degraded"):
             # Your own replica count does not help when something you depend on is slow.
             # Every replica talks to the same degraded thing.
             return Effect(entity.id, DEGRADED, emit=["dependency_degraded"], note="dep degraded")
-        if event == "node_lost":
-            # one node out of N gone: degraded. the last one: dead.
-            return Effect(entity.id,
-                          DEGRADED if replicas > 1 else DOWN,
-                          emit=["dependency_degraded" if replicas > 1 else "dependency_down"],
-                          note=f"replicas={replicas}")
         return Effect(entity.id)
 ```
 
-`DatabaseModel` returns `DEGRADED` (read-only, failed over) if a replica exists and `DOWN`
-if not.
+**A model does not count.** An earlier version read `entity.attrs["replicas"]` here, after
+propagation had already counted the surviving places — two answers to one question, and the
+attribute won. Two independent reviewers found it. Counting now happens once, in
+`_translate()` below, and the model is handed the conclusion as the event `place_lost`.
+
+`DatabaseModel` reacts to the same `place_lost` with `DEGRADED` and the note "failed over,
+reads only". There is deliberately no `replica: true` shortcut: an attribute asserting that
+a replica exists is a claim the graph can check, and `orrery check` flags exactly that shape
+as `redundancy on paper only`. Believing the attribute here would have the engine contradict
+its own audit, in the direction that hides an outage.
 
 ### A monotone fixpoint, not a single visit
 
@@ -326,7 +343,7 @@ proposed. The returned list must not claim an improvement that never happened.
 
 ### Event translation counts survivors
 
-A node dying is not `down` to the services standing on it. It is `node_lost` — losing one
+A node dying is not `down` to the services standing on it. It is `place_lost` — losing one
 of the places you run. Those are different events with different outcomes, and `_translate()`
 performs the conversion.
 
@@ -334,10 +351,14 @@ The part that matters is how it decides. It does **not** trust the `replicas` at
 counts the `RUNS_ON` targets that are still alive:
 
 ```python
-hosts = world.out_edges(dependent_id, RelationKind.RUNS_ON)
-alive = sum(1 for h in hosts if world.entity(h).status is not Status.DOWN)
-return "node_lost" if alive else "dependency_down"
+places = world.out_edges(dependent_id, RelationKind.RUNS_ON)
+alive = sum(1 for p in places if world.entity(p).status in _ALIVE)
+return "place_lost" if alive else "dependency_down"
 ```
+
+`_ALIVE` is `(UP, DEGRADED)`. It was `status is not DOWN`, which counted `unknown` as a
+survivor — so an entity nobody had any information about kept a service on its feet in the
+answer. Unknown is not alive.
 
 If nowhere is left to run, this is not a degradation, it is an outage. `replicas: 3` written
 down once and drifting ever since would have said otherwise. In the demo world, `svc-web`
@@ -353,7 +374,7 @@ what crosses it at "degraded"**.
 hard edge:  dependency_down      ──▶  dependency_down
 soft edge:  down                 ──▶  dependency_degraded
             dependency_down      ──▶  dependency_degraded
-            node_lost            ──▶  dependency_degraded
+            place_lost           ──▶  dependency_degraded
             dependency_degraded  ──▶  unchanged (already at the cap)
 ```
 
@@ -377,25 +398,40 @@ edge is treated as hard for the rest of the run.
 
 ```
 $ orrery simulate ext-payments
-  ext-payments   -> down      passthrough
-  svc-checkout   -> degraded  dep degraded
+  ext-payments             -> down      passthrough
+  svc-checkout             -> degraded  dep degraded
+  svc-web                  -> degraded  dep degraded
+```
 
+```
 $ orrery simulate ext-payments --elapsed-s 14400
-  ext-payments   -> down      passthrough
-  svc-checkout   -> down      hard dep down
+  ext-payments             -> down      passthrough
+  svc-checkout             -> down      hard dep down
+  svc-web                  -> degraded  dep degraded
 ```
 
 One trigger, two truths, and only the duration separates them. `svc-checkout` queues
 payments and retries; past the queue's capacity it stops taking orders.
 
-`DEFAULT_TOLERANCE_S` is `0`, which means "soft for as long as you like". The tolerance only
-bites when a relation declares one. A non-zero default — an hour, say — would quietly turn
-every soft edge hard in a long outage, and the engine has no basis for that claim on its own.
+**There is no default tolerance.** A relation without `tolerance_s` stays soft for as long
+as you like. A non-zero default — an hour, say — would quietly turn every soft edge hard in a
+long outage, and the engine has no basis for that claim on its own.
+
+### Degradation does not travel forever
+
+`MAX_DEGRADE_HOPS = 2`. A `down` propagates as far as the graph carries it, but a
+*degradation* stops after two `DEPENDS_ON` hops. Slowness attenuates: the thing that calls
+the thing that calls the slow thing is usually fine, and without a limit one slow database
+painted half the estate degraded and made the answer useless. Only call edges count toward
+the limit — standing on a rack that stands on a site is not two hops of anything.
+
+So "every entity ends at the worst status any path could give it" holds for outages, and for
+degradation within two calls.
 
 ### Quorum: MEMBER_OF read upward
 
 `MEMBER_OF` normally carries consequence downward. Kill the cluster and its members go with
-it. `_quorum_failures()` reads the same edge the other way.
+it. `_membership_effects()` reads the same edge the other way.
 
 Give a cluster a `quorum` attribute and every time a member goes down the engine counts the
 survivors. Below quorum, the cluster goes down — and that takes the remaining members with
@@ -635,7 +671,7 @@ instead of oracular.
 | Running the whole estate live | This is not a copy of production. Detail only where it is needed |
 | Handing graph queries to an LLM | Queries must be deterministic. The same input has to give the same answer to be usable at 3am |
 | Visualization | Terminal output first. A picture drawn before accuracy is verified only creates confident mistakes |
-| Capacity modeling | See [§12](#12-what-this-engine-still-gets-wrong). It may not belong in a structural engine at all |
+| Capacity modeling | See [§13](#13-what-this-engine-still-gets-wrong). It may not belong in a structural engine at all |
 
 ---
 
@@ -673,9 +709,14 @@ when a record genuinely covers the whole world.
 
 ### Metrics
 
-- **recall** — of what actually broke, how much did we predict as broken. This catches misses.
-- **precision** — of what we predicted broken, how much actually broke. This catches false alarms.
+- **recall** — of what actually broke, how much did we call broken at all. This catches misses.
+- **precision** — of the predictions someone actually checked, how many were right. It is an
+  **upper bound**: predictions of breakage that nobody recorded either way cannot be counted
+  against it, and the report says how many of those there were. Over-predicting is free until
+  the records say otherwise.
 - **exact** — how often the severity was exactly right.
+- **on breaks** — the same, counting only what actually broke. Agreeing that forty untouched
+  things were untouched is not skill, and it is most of what `exact` is measuring.
 
 **Across several incidents the judgements are pooled, not averaged.** Averaging per-incident
 rates lets a one-entity incident weigh as much as a forty-entity one, which flatters small
@@ -700,9 +741,13 @@ $ orrery backtest fixtures/incidents
 backtest: 6 incident(s), 24 prediction(s) scored
   78 entit(ies) skipped — the records say nothing about them
 
-  recall    100%   of what broke, we predicted broken
-  precision 100%   of what we predicted, actually broke
-  exact      96%   severity exactly right
+  recall    100%   of what broke, we called broken at all
+  precision 100%   of the predictions someone checked, right
+  exact     96%   severity exactly right
+  on breaks 95%   severity exactly right, counting only what broke
+
+  ⚠ 5 prediction(s) of breakage nobody checked. Precision cannot see them,
+    so it is an upper bound: over-predicting is free until the records say otherwise.
 
   hit            19   predicted, right severity
   correct up      4   agreed it was unaffected
@@ -710,11 +755,18 @@ backtest: 6 incident(s), 24 prediction(s) scored
   overstated      0   said down, was degraded
   false alarm     0   said broken, was fine
   MISS            0   said fine, was broken
+
+⚠ fewer than 30 scored predictions. Treat these rates as a smoke test, not a measurement.
+⚠ every incident replays against one snapshot. If that snapshot was written after the
+  incidents, this measures hindsight rather than prediction — an edge learned from a
+  postmortem is already in the map being graded.
 ```
 
 **No misses.** Everything that broke was predicted broken. That was not true earlier, and the
-harness is what found each of the failures since fixed: soft dependencies, then their
-tolerance, then quorum, then counting survivors instead of trusting `replicas`.
+harness is what found each of the failures since fixed. Its first run found three:
+arrival order deciding the answer, quorum ignored entirely, and services trusting a
+`replicas` attribute instead of counting the places actually left. Later runs found the
+absence of soft dependencies, and then that a soft dependency is only soft for a while.
 
 The 24 scored predictions are well under 30, so those rates are a smoke test on synthetic
 fixtures and nothing more.
@@ -734,8 +786,9 @@ measures nothing.
 
 ## 14. Performance
 
-These are one laptop's numbers — an Apple M4 Pro running Python 3.14. Treat them as an order
-of magnitude, not a specification. Reproduce and disagree with them:
+These are one laptop's numbers — an Apple M4 Pro running Python 3.14, which is **not** a
+version CI exercises (it runs 3.12 and 3.13). Treat them as an order of magnitude, not a
+specification. Reproduce and disagree with them:
 
 ```bash
 uv run python scripts/bench.py --hosts 10000 --repeat 10

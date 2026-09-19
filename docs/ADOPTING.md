@@ -12,7 +12,7 @@ The instinct is to fork. Resist it for as long as you can.
 
 | | Depend | Fork |
 |---|---|---|
-| Upgrades | `uv lock --upgrade-package orrery` | merge conflicts forever |
+| Upgrades | `uv lock --upgrade-package orrery-sim` | merge conflicts forever |
 | Your connectors | live in your repo either way | live in your repo either way |
 | Behavior models | subclass or replace at runtime | ditto |
 | Clean-room | enforced by the boundary | you have to remember |
@@ -25,8 +25,15 @@ itself works, and when you do, send the change back rather than carrying it.
 ```toml
 # your-repo/pyproject.toml
 [project]
-dependencies = ["orrery>=0.1"]
+dependencies = [
+  "orrery-sim @ git+https://github.com/yim0823/orrery@<commit-sha>",
+]
 ```
+
+⚠️ **This is not on PyPI, and the name `orrery` there belongs to an unrelated project.**
+Writing `dependencies = ["orrery"]` installs somebody else's package. Until this one is
+published — which is blocked on the licensing question in the README's project status —
+depend on it by git reference, pinned to a commit.
 
 Pin it. An engine that decides what is safe to restart is not a dependency you want
 floating.
@@ -222,7 +229,7 @@ orrery simulate ext-payments --elapsed-s 14400   # four hours in: down
 dies it takes the healthy survivor with it.
 
 ```yaml
-- {id: etcd-prod, kind: cluster, attrs: {quorum: 2}}
+- {id: etcd-prod, kind: cluster, name: "etcd (prod)", attrs: {quorum: 2}}
 ```
 
 **Where things actually run.** Do not write `replicas` by hand and trust it. The engine
@@ -322,7 +329,7 @@ In rough order of how quickly it earns trust:
    thing switched off.
 
 Lead with the second answer, never the first. "Five entities impacted" is noise.
-"Checkout stops, because inventory is down to one replica" is a decision.
+"Checkout stops, because the stock database went down with the host" is a decision.
 
 ---
 

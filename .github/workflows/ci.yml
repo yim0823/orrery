@@ -32,6 +32,11 @@ jobs:
       - name: Test
         run: uv run pytest -q
 
+      - name: Mermaid diagrams render
+        run: |
+          npm install --no-save --no-fund --no-audit mermaid@11 jsdom@25
+          node scripts/check_mermaid.mjs README.md README.ko.md docs/ARCHITECTURE.md docs/ARCHITECTURE.ko.md
+
       - name: Internal links resolve
         run: |
           uv run python - <<'PY'

@@ -68,6 +68,37 @@ this section of the file will say so when they do.
   seed, so the same map named different hosts in different processes. The nearest carrier
   is now the one that itself stands on the most, and the depth cap — which silently
   returned "nothing found" past six hops — is gone.
+- **Four mermaid diagrams did not render.** `call` is a flowchart keyword (`click X call
+  fn()`), so using it as a subgraph id was a parse error — the two-layer diagram, the one
+  readers are pointed at first, showed a red error box on GitHub in all four documents
+  that carry it. `scripts/check_mermaid.mjs` now parses every diagram in CI, because a
+  Python test suite was never going to notice this.
+- **`docs/ARCHITECTURE.md` §4–5 documented an engine that has not existed since 0.2.0.**
+  `_IMPACT_EDGES`, `node_lost`, `DEFAULT_TOLERANCE_S`, `_quorum_failures`, a `ServiceModel`
+  reading `attrs["replicas"]`, and "`CONNECTS_TO` is the only one not used for impact
+  propagation" — every one of them removed or renamed two releases ago, in the section
+  that describes the core of the engine, in a document the README called "kept current".
+  `MAX_DEGRADE_HOPS` was never documented at all. `scripts/check_readme.py` now covers
+  the architecture documents too, so their command output cannot drift again; the prose
+  had to be read by hand.
+- **`docs/ADOPTING.md` told readers to install someone else's package.**
+  `dependencies = ["orrery>=0.1"]` — `orrery` on PyPI is an unrelated project and this one
+  is unpublished. It now shows a pinned git dependency and says why.
+- **The Korean README's modelling example did not ingest** (a missing `name`, a relation
+  to an entity that was never declared) and taught `replicas` / `replica: true`, which the
+  English copy explicitly tells you not to write. It also claimed four of the five
+  relation kinds propagate impact; all five do. It gained the hard/soft dependency
+  section, the tolerance section and the command table it never had.
+- Smaller, all of them false as written: `README.md` claiming a `spof` column measured by
+  a benchmark that does not time `spof`; `world.save()` shown writing into a directory it
+  does not create; connectors described as living only outside the repo on one page and a
+  shipped Kubernetes connector named on another; three different accounts of what the
+  backtest harness found on its first run; `docs/VISION.md` listing two of four runtime
+  dependencies; two anchors pointing at section numbers that had shifted.
+- **The claims this project is most exposed on now say they are a survey.** "The only
+  artifact in this space" and "none of them score their own map" were stated as fact with
+  nothing in the repository behind them. What is true is that we looked and did not find
+  one, and that being shown otherwise would be worth more than being right.
 - **`README.ko.md` documented behavior the engine does not have.** Its `simulate` output
   showed `replicas=3` and `replicas=1` as reasons and the prose explained the result by
   replica counts. The engine counts surviving `RUNS_ON` edges and has not read a replica
@@ -81,7 +112,7 @@ this section of the file will say so when they do.
 Four adversarial reviewers were pointed at 0.1.0 and told to break it. They did. This
 release is what they found, and the most useful thing in it is not any single fix — it is
 that a mutation sweep broke the source in twenty-two small ways and **nineteen of those
-mutations passed 142 green tests**. Test count is not evidence.
+mutations passed 140 green tests**. Test count is not evidence.
 
 ### Fixed — the engine was wrong
 

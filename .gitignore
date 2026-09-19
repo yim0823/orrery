@@ -8,3 +8,4 @@ dist/
 .env
 denylist*.txt
 .orrery/
+node_modules

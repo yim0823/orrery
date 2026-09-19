@@ -1,9 +1,11 @@
 > 이 문서는 [English ARCHITECTURE](ARCHITECTURE.md)의 한국어판입니다. 최신 내용은 영어판이 기준입니다.
 >
-> ⚠️ **이 번역은 0.1.0 시점에서 멈춰 있습니다.** 아래 「지도의 두 층」 절만 최신이고, 나머지는
-> 0.2.0에서 바뀐 것들(전파 규칙, 홉 상한, 정족수, 백테스트 지표, 성능)을 반영하지 않았습니다.
-> 정확한 현재 동작은 영어판을 보십시오. 틀린 번역을 최신인 척 두는 것보다 뒤처졌다고 적는 편이
-> 낫습니다.
+> ⚠️ **이 번역은 0.1.0 시점의 것이고, 아직 전부 따라오지 못했습니다.**
+> §2 「지도는 두 층으로 되어 있습니다」만 0.3.0 기준으로 다시 썼습니다. 나머지 절은 그 뒤에
+> 바뀐 것들 — 전파 규칙, 저하 홉 상한, 정족수, 백테스트 지표, 성능, 지도 감사(`check`·`spof`),
+> 시나리오 실행기 — 을 **설명하지 않습니다.** 명백히 틀린 문장은 지웠지만, 없는 절은 없는 채로
+> 남아 있습니다. **정확한 현재 동작은 [영어판](ARCHITECTURE.md)이 기준입니다.** 틀린 번역을
+> 최신인 척 두는 것보다 뒤처졌다고 적는 편이 낫습니다.
 
 # 설계
 
@@ -49,7 +51,7 @@ orrery     ──never───────▶  회사 리포
 
 ```mermaid
 flowchart TB
-  subgraph call["호출 층 — 누가 누구를 부르나"]
+  subgraph calls["호출 층 — 누가 누구를 부르나"]
     direction LR
     web["웹 프론트"] -->|DEPENDS_ON| checkout["체크아웃"]
     checkout -->|DEPENDS_ON| inventory["재고"]
@@ -58,13 +60,15 @@ flowchart TB
 
   subgraph infra["인프라 층 — 무엇이 무엇 위에 있나"]
     direction LR
-    node["노드"] -->|RUNS_ON| host["서버"]
-    host -->|HOSTED_IN| site["IDC"]
+    node["노드"] -->|RUNS_ON| vm["VM"]
+    vm -->|RUNS_ON| host["물리 서버"]
+    host -->|HOSTED_IN| rack["랙"]
+    rack -->|HOSTED_IN| site["IDC"]
     host -->|CONNECTS_TO| seg["네트워크 대역"]
     node -->|MEMBER_OF| cluster["클러스터"]
   end
 
-  call -.->|"RUNS_ON: 서비스가 노드 위에서 돈다"| infra
+  calls -.->|"RUNS_ON: 서비스가 노드 위에서 돈다"| infra
 ```
 
 | | 인프라 층 | 호출 층 |
@@ -230,7 +234,7 @@ class ServiceModel:
 
 기본값을 `hard`로 둔 것도 같은 이유입니다. 아닌 것을 soft로 찍으면 진짜 장애를 숨기고, 아닌 것을 hard로 찍으면 헛경보가 납니다. 앞쪽이 더 나쁩니다.
 
-**멱등 방문.** 같은 개체는 한 번만 처리합니다(`seen`). 순환 의존이 있어도 멈춥니다. 대신 한계가 있습니다. 먼저 도착한 사건이 이깁니다. 같은 개체에 저하와 사망이 동시에 도달하면 **도착 순서가 결과를 정합니다.** 정확히 하려면 사건에 심각도를 주고 강한 쪽으로 수렴시켜야 하는데, 아직 안 했습니다.
+**단조 고정점.** 상태는 나빠지기만 합니다. `up`·`unknown`이 0, `degraded`가 1, `down`이 2로 순위가 매겨져 있고, 들어온 효과가 지금 상태보다 위일 때만 갱신됩니다. 그래서 **도착 순서가 결과를 바꾸지 않고**, 순환 의존이 있어도 멈춥니다. 한 번만 방문하고 먼저 도착한 사건이 이기던 초기 구현은 같은 개체에 저하와 사망이 동시에 닿을 때 순서가 답을 정했습니다 — 0.1.0에서 고쳤습니다.
 
 ---
 
@@ -349,7 +353,12 @@ class BehaviorModel(Protocol):
 
 ### 지금 이 엔진이 틀리는 것
 
-데모 픽스처에서 재현율 100%, 정확도 75%가 나옵니다. 과대예측 3건은 잡음이 아니라 **소프트 의존을 모델링하지 못하는 결함**입니다. 결제 대행이 죽어도 큐에 쌓고 재시도하는 체크아웃은 살아남는데, 엔진은 죽는다고 합니다. `fixtures/incidents/INC-0003.yaml`이 그 실패를 계속 보이게 하려고 들어 있습니다. 엔진이 통과하는 장애만 모은 백테스트는 아무것도 재지 않습니다.
+⚠️ 이 절의 숫자는 **0.1.0 시점의 것이라 지금과 다릅니다.** 현재 수치와 남은 결함은
+[영어판 §13](ARCHITECTURE.md#13-what-this-engine-still-gets-wrong)을 보십시오. 그때 여기
+적혀 있던 과대예측 3건은 소프트 의존과 유예 시간이 들어오면서 사라졌고, 남은 것은 **용량** —
+살아남은 쪽이 그 부하를 받아낼 수 있는지 — 하나입니다. `fixtures/incidents/INC-0006.yaml`이
+그 실패를 계속 보이게 하려고 들어 있습니다. 엔진이 통과하는 장애만 모은 백테스트는 아무것도
+재지 않습니다.
 
 **표본이 30건 미만이면 리포트가 스스로 경고합니다.** 3건으로 낸 100%는 측정이 아니라 연기 감지입니다.
 
@@ -364,9 +373,9 @@ class BehaviorModel(Protocol):
 | schema | `orrery.schema` | 개체·관계 타입 |
 | connectors | `orrery.connectors` | 인벤토리 소스 인터페이스 (구현은 바깥) |
 | resolve | `orrery.resolve` | 별칭 후보 제안 (병합 안 함) |
-| world | `orrery.world` | 그래프, 스냅샷·포크, blast radius |
-| sim | `orrery.sim` | 시계, 행동 모델, 결과 전파 |
-| scenarios | `orrery.scenarios` | 시나리오 형식 (형식만 정의, 실행기 미구현) |
+| world | `orrery.world` | 그래프, 스냅샷·포크, blast radius, 스냅샷 비교(`.diff`), 지도 감사(`.audit`) |
+| sim | `orrery.sim` | 행동 모델, 결과 전파 |
+| scenarios | `orrery.scenarios` | 시나리오 형식과, 월드를 깨뜨려 에이전트에게 도구를 쥐여 주고 채점하는 실행기 |
 | scoring | `orrery.scoring` | 4축 루브릭, 무행동 게이트 |
 | backtest | `orrery.backtest` | 과거 장애 재생·채점 |
 | harness | `orrery.harness` | 에이전트 도구 표면 계약 (인터페이스만, 구현 미완) |

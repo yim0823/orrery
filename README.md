@@ -151,7 +151,7 @@ finished and answers wrongly.
 
 ```mermaid
 flowchart TB
-  subgraph call["Call layer — who talks to whom"]
+  subgraph calls["Call layer — who talks to whom"]
     direction LR
     web["storefront"] -->|DEPENDS_ON| checkout["checkout"]
     checkout -->|DEPENDS_ON| inventory["inventory"]
@@ -168,7 +168,7 @@ flowchart TB
     node -->|MEMBER_OF| cluster["cluster"]
   end
 
-  call -.->|"RUNS_ON: a service runs on a node"| infra
+  calls -.->|"RUNS_ON: a service runs on a node"| infra
 ```
 
 | | Infrastructure layer | Call layer |
@@ -328,9 +328,10 @@ failure hurts people, the second annoys them — so when in doubt, leave it hard
 
 ### Connectors
 
-orrery ships the **interface**, not implementations. Connectors to your CMDB,
-Kubernetes or monitoring live in your own repository, because no two organizations
-model these the same way.
+orrery ships the **interface**. One implementation comes with it —
+`orrery.connectors.kubernetes`, which reads `kubectl get -o json` — as a worked example.
+Connectors to your CMDB or monitoring live in your own repository, because no two
+organizations model those the same way.
 
 ```python
 from orrery.connectors.base import Discovery
@@ -392,6 +393,8 @@ You do not need to adopt the engine to use the harness. If your dependencies alr
 in a graph, read them out, and let your own past incidents tell you how good that map is:
 
 ```python
+import pathlib
+
 from orrery.adapters.neo4j import LabelMap, Neo4jSource
 from orrery.schema import EntityKind, RelationKind
 
@@ -399,20 +402,22 @@ world = Neo4jSource(driver, LabelMap(
     entity_labels={"Server": EntityKind.HOST, "App": EntityKind.SERVICE},
     relation_types={"DEPLOYED_ON": RelationKind.RUNS_ON, "CALLS": RelationKind.DEPENDS_ON},
 )).load()
+pathlib.Path("snapshots").mkdir(exist_ok=True)   # save writes, it does not create
 world.save("snapshots/2026-03.yaml")
 ```
 
 Then write incidents against that snapshot and run `orrery backtest`. The number that
 comes out — "the map predicted 19 of 26 impacts, missed 2, over-called 2" — is a claim
-about your map, not about this tool, and it is the only artifact in this space that lets
-you say anything precise about a dependency map at all.
+about your map, not about this tool. It is the only number we know of that lets you say
+anything precise about a dependency map at all, and we would rather be shown a better one
+than be right about that.
 
 ---
 
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md) — data model, propagation, extension points, tradeoffs
-- [Architecture (한국어)](docs/ARCHITECTURE.ko.md) — the same document in Korean; the English one is kept current
+- [Architecture (한국어)](docs/ARCHITECTURE.ko.md) — the Korean translation. Its §2 is current; the rest is at 0.1.0 and says so. The English one is the reference
 - [Clean-room rules](CLEANROOM.md) — what may never enter this repository
 - [Contributing](CONTRIBUTING.md)
 
@@ -440,11 +445,13 @@ but if you need a clean provenance chain, this is not yet it.
 
 **Accuracy is the open problem, and measuring it is the part nobody else does.**
 
-Plenty of tools will draw you a dependency map. Reviewing the field in 2026 — CMDB and
-application-dependency-mapping products, observability service maps, chaos platforms,
-developer portals — none of them score their own map against what actually happened in
-past incidents. That is what this harness does, and **it does not require the map to be
-orrery's.** Point `orrery.adapters.neo4j` at a graph you already run, save the snapshot,
+Plenty of tools will draw you a dependency map, and several draw better ones than this.
+Looking across the field in 2026 — CMDB and application-dependency-mapping products,
+observability service maps, chaos platforms, developer portals — we did not find one that
+scores its own map against what actually happened in past incidents. **That is a survey,
+not a proof**, and it is the claim this project is most exposed on: if a tool you use does
+this, the honest thing is to use that tool and close this tab. What the harness does is
+score a map, and **it does not require the map to be orrery's.** Point `orrery.adapters.neo4j` at a graph you already run, save the snapshot,
 write your incidents against it, and the thing being graded is your existing map.
 
 ```console
@@ -481,19 +488,22 @@ and the engine grades itself. Two design choices matter:
   scored as healthy. You only learn about what someone noticed at the time, and counting
   unexamined systems as fine inflates every number on this report.
 - **Severity counts.** Predicting "down" when something merely degraded is not a hit. It
-  is `overstated`, and it is why the demo scores 100% recall but 75% exact.
+  is `overstated`, and it is why `exact` is reported separately from `recall` — and why
+  `on breaks` is reported separately again, since agreeing that untouched things were
+  untouched is most of what a raw `exact` measures.
 
-The harness has earned its keep twice. Its first run found four defects — arrival order
-deciding whether a service came out degraded or down, quorum ignored entirely, no notion
-of a soft dependency, and a service that trusted a `replicas` attribute instead of
-counting the nodes actually left. An adversarial review then found that the last one was
+The harness has earned its keep twice. Its first run found three defects — arrival order
+deciding whether a service came out degraded or down, quorum ignored entirely, and a
+service that trusted a `replicas` attribute instead of counting the nodes actually left.
+(A fourth, the absence of soft dependencies, came out of the next run.) An adversarial
+review then found that the last of the three was
 only half fixed: propagation counted survivors and the behavior model then overrode the
 count with the attribute anyway, so a service on forty-nine healthy nodes was reported
 down when one rebooted. That review also found that a network segment failing computed as
 affecting nothing, because the edge that attaches a host to it was excluded from impact.
 
 Read that as the argument for the harness rather than against the engine: both classes of
-defect were invisible to 140 passing tests, and the second was invisible to the harness
+defect were invisible to a green test suite, and the second was invisible to the harness
 too until someone went looking for it deliberately.
 
 The one `understated` result left is deliberate, in `fixtures/incidents/INC-0006.yaml`:
@@ -515,19 +525,27 @@ hindsight rather than prediction; the report says that too.
 Until you have run this against your own incidents, treat the output as advisory and say
 so to anyone who asks.
 
-Performance, measured rather than asserted — one laptop, `scripts/bench.py`:
+Performance, measured rather than asserted — one laptop, and reproducible:
 
-| World | blast (whole site) | simulate | fork | spof |
-|---|---|---|---|---|
-| 25,508 entities | 53 ms | 164 ms | below timer resolution | 0.3 s, 130 MB |
-| 127,508 entities | 307 ms | 1.1 s | below timer resolution | 5.5 s, 1.3 GB |
+```bash
+uv run python scripts/bench.py --hosts 10000 --repeat 10
+uv run python scripts/bench.py --hosts 50000 --repeat 3
+```
+
+| World | blast (whole site) | simulate | fork |
+|---|---|---|---|
+| 25,508 entities | 53 ms | 164 ms | below timer resolution |
+| 127,508 entities | 307 ms | 1.1 s | below timer resolution |
 
 The large numbers are the pathological case: a whole site failing and reaching a third of
 the estate. A single host or database is an order of magnitude cheaper.
 
-`spof` is the one to watch, and memory is its limit rather than time — it holds reach as
-a bitset per component, so it grows with the square of the estate. Past a few hundred
-thousand entities it needs a different algorithm, not a bigger machine.
+`spof` is the one to watch, and memory is its limit rather than time — it holds reach as a
+bitset per component, so it grows with the square of the estate. Past a few hundred
+thousand entities it needs a different algorithm, not a bigger machine. **`bench.py` does
+not time it**, so there is no number here to quote; the generated world also has no rack
+or vm layer, which means it cannot exercise `check` either. Both are gaps in the benchmark
+rather than claims about the commands.
 
 ---
 

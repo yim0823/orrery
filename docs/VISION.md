@@ -58,9 +58,9 @@ one — which is what an actual incident is, and what no evaluation currently re
 
 ## What this would be built on
 
-Already used: `networkx` for the graph and `pydantic` for the schema, with an optional
-Neo4j adapter for reading a graph you already run. That is the whole dependency list, and
-it is short on purpose.
+Already used: `networkx` for the graph, `pydantic` for the schema, `pyyaml` for the file
+format and `typer` for the CLI, with an optional Neo4j adapter for reading a graph you
+already run. That is the whole dependency list, and it is short on purpose.
 
 Likely later, by need rather than by plan:
 
