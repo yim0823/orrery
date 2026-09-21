@@ -67,4 +67,6 @@ relations:
   - {src: node-a1, dst: etcd, kind: MEMBER_OF}
   - {src: node-a2, dst: etcd, kind: MEMBER_OF}
   - {src: node-b1, dst: etcd, kind: MEMBER_OF}
-  - {src: svc-web, dst: lb-edge, kind: MEMBER_OF}
+  # How traffic reaches the storefront. The backends keep running when the edge dies;
+  # nobody can get to them, which is a different problem with a different fix.
+  - {src: svc-web, dst: lb-edge, kind: REACHED_VIA}

@@ -212,6 +212,7 @@ arrow points from the thing that depends to the thing depended upon.**
 | `RUNS_ON` | service | node | the service **runs on** the node; a node on a vm, a vm on a host |
 | `HOSTED_IN` | host | rack | the host **sits in** the rack; a rack in a site |
 | `MEMBER_OF` | node | cluster | the node **belongs to** the cluster |
+| `REACHED_VIA` | service | load balancer | traffic **reaches** the service through it |
 | `DEPENDS_ON` | service | database | the service **needs** the database |
 | `CONNECTS_TO` | host | network segment | the host **talks to** the segment |
 

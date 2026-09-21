@@ -13,6 +13,27 @@ one was cut down, one survived — and between them the reviewers found two defe
 were not in the proposals at all. Both were the same shape: one code path doing the right
 thing and its twin quietly not.
 
+### Added
+
+- **`REACHED_VIA`: a service nobody can reach is broken, however healthy its process is.**
+  This came out of a real map rather than a design session. A game's load balancers were
+  loaded into a world, the appliance carrying six of its VIPs was killed, and `simulate`
+  answered *nothing happens* — correct under the model as it stood, since the backends
+  really do keep running, and useless, because no player could have connected. Modelling
+  the edge as pool membership said the true half and stopped there.
+
+  Reachability turns out to behave exactly like placement: several ways in are redundancy,
+  one is a single point of failure, none is an outage. So it is counted by the same code —
+  `_translate` now counts surviving alternatives for both `RUNS_ON` and `REACHED_VIA` — and
+  the only difference is the word in the finding: `place_lost` is answered by another
+  machine, `path_lost` by another route. On the map that prompted it, one appliance went
+  from affecting nothing to taking down six services, including the game's login.
+
+  It also settles the direction problem a reviewer raised and this changelog deferred:
+  `service MEMBER_OF load_balancer` pointed the wrong way, since the pool does not depend
+  on its members. `service REACHED_VIA load_balancer` points from dependent to
+  depended-upon like every other edge.
+
 ### Fixed
 
 - **A relation could never be confirmed by a second source.** `add_entity` merges

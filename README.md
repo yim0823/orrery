@@ -288,7 +288,7 @@ run, not a number you assert.** A service with three `RUNS_ON` edges survives lo
 a service with `replicas: 3` and one `RUNS_ON` edge does not, and `orrery check` will tell
 you which one you have built.
 
-Five relation kinds. The arrow always points **from the dependent to the depended-upon**
+Six relation kinds. The arrow always points **from the dependent to the depended-upon**
 — reverse one and the blast radius is silently wrong.
 
 There are seventeen entity kinds (`orrery ingest` will list them if you mistype one); the
@@ -302,6 +302,7 @@ differently — `vm` and `host` are separate for the reason given
 | `RUNS_ON` | infrastructure | service runs on node; node runs on vm; vm runs on host |
 | `HOSTED_IN` | infrastructure | host is hosted in a rack; rack in a site |
 | `MEMBER_OF` | infrastructure | node is a member of a cluster |
+| `REACHED_VIA` | infrastructure | service is reached through a load balancer, DNS name or CDN |
 | `CONNECTS_TO` | infrastructure | host is attached to a network segment |
 | `DEPENDS_ON` | call | service depends on a database |
 

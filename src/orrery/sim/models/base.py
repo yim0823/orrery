@@ -45,11 +45,14 @@ class _Passthrough:
             return Effect(entity.id, Status.DOWN, emit=["dependency_down"], note="passthrough")
         if event in ("degraded", "dependency_degraded"):
             return Effect(entity.id, Status.DEGRADED, emit=["dependency_degraded"])
-        if event == "place_lost":
-            # Somewhere it ran is gone but somewhere else is left. For an entity with no
-            # opinion about redundancy that is a degradation, not an outage.
+        if event in ("place_lost", "path_lost"):
+            # Somewhere it ran, or a way in, is gone but another is left. For an entity
+            # with no opinion about redundancy that is a degradation, not an outage.
             return Effect(
-                entity.id, Status.DEGRADED, emit=["dependency_degraded"], note="lost a place to run"
+                entity.id,
+                Status.DEGRADED,
+                emit=["dependency_degraded"],
+                note="lost a place to run" if event == "place_lost" else "lost a way in",
             )
         return Effect(entity.id)
 
@@ -75,6 +78,13 @@ class ServiceModel:
                 emit=["dependency_degraded"],
                 note="lost one of its places to run",
             )
+        if event == "path_lost":
+            return Effect(
+                entity.id,
+                Status.DEGRADED,
+                emit=["dependency_degraded"],
+                note="lost one of the ways in",
+            )
         if event in ("degraded", "dependency_degraded"):
             # Replica count does not help when something you depend on is slow — every
             # replica talks to the same slow thing.
@@ -99,7 +109,7 @@ class DatabaseModel:
     def react(self, entity: Entity, event: str) -> Effect:
         if event in ("down", "dependency_down"):
             return Effect(entity.id, Status.DOWN, emit=["dependency_down"])
-        if event == "place_lost":
+        if event in ("place_lost", "path_lost"):
             return Effect(
                 entity.id,
                 Status.DEGRADED,
@@ -126,7 +136,7 @@ class LoadBalancerModel:
     def react(self, entity: Entity, event: str) -> Effect:
         if event in ("down", "dependency_down"):
             return Effect(entity.id, Status.DOWN, emit=["dependency_down"], note="down")
-        if event in ("degraded", "dependency_degraded", "place_lost", "member_lost"):
+        if event in ("degraded", "dependency_degraded", "place_lost", "path_lost", "member_lost"):
             return Effect(
                 entity.id, Status.DEGRADED, emit=["dependency_degraded"], note="pool thinned"
             )

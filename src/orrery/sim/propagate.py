@@ -31,6 +31,9 @@ _DEPENDENT_EDGES = (
     # host with it. Excluding this once cost the engine an entire class of outage: a VLAN
     # or top-of-rack failure computed as affecting nothing at all.
     RelationKind.CONNECTS_TO,
+    # How traffic reaches a service. Losing every way in is an outage to everyone outside,
+    # whatever the processes are doing.
+    RelationKind.REACHED_VIA,
 )
 
 _RANK: dict[Status, int] = {
@@ -88,6 +91,20 @@ and it is stated here rather than buried so that anyone who disagrees can raise 
 
 _CALL_EDGES = frozenset({RelationKind.DEPENDS_ON})
 
+# Edges whose targets are alternatives, where losing one is a degradation and losing the
+# last is an outage. `propagate` counts the survivors rather than trusting an attribute.
+#
+# `REACHED_VIA` is the second one and it is why it exists. A load balancer dying does not
+# stop the backends — they keep running, and modelling it as membership said exactly that
+# and stopped there. But nobody can reach them, and a service nobody can reach is broken
+# however healthy its process is. Reachability turns out to behave like placement: several
+# paths in are redundancy, one is a single point of failure, none is an outage. So it is
+# counted by the same code, and the only difference is the word in the finding.
+_COUNTED_EDGES = {
+    RelationKind.RUNS_ON: ("place_lost", "places to run"),
+    RelationKind.REACHED_VIA: ("path_lost", "ways in"),
+}
+
 # Which kinds carry their own death downward to their members. A cluster does: the nodes
 # in it stop being nodes. A load balancer does not: a VIP losing its pool, or dying
 # itself, leaves the backends running and merely unreachable by that path — and treating
@@ -135,11 +152,13 @@ def _translate(event: str, edge: RelationKind, world: World, dependent_id: str) 
     question about the graph rather than about the entity — so it is answered here, by
     counting, rather than by trusting a `replicas` attribute written down once.
     """
-    if edge is RelationKind.RUNS_ON and event == "dependency_down":
-        places = world.out_edges(dependent_id, RelationKind.RUNS_ON)
-        alive = sum(1 for p in places if world.entity(p).status in _ALIVE)
-        # nowhere left to run: this is not a degradation, it is an outage
-        return "place_lost" if alive else "dependency_down"
+    counted = _COUNTED_EDGES.get(edge)
+    if counted is not None and event == "dependency_down":
+        weakened, _ = counted
+        alternatives = world.out_edges(dependent_id, edge)
+        alive = sum(1 for p in alternatives if world.entity(p).status in _ALIVE)
+        # none left: this is not a degradation, it is an outage
+        return weakened if alive else "dependency_down"
     return event
 
 

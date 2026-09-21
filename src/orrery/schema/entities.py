@@ -51,8 +51,9 @@ class RelationKind(StrEnum):
     RUNS_ON = "RUNS_ON"  # service -> node/host ; node -> host ; host -> rack
     DEPENDS_ON = "DEPENDS_ON"  # service -> service/database/external/load_balancer
     CONNECTS_TO = "CONNECTS_TO"  # host/node -> network_segment
-    MEMBER_OF = "MEMBER_OF"  # node -> cluster ; service -> load_balancer pool
+    MEMBER_OF = "MEMBER_OF"  # node -> cluster
     HOSTED_IN = "HOSTED_IN"  # rack/host/cluster/segment -> site
+    REACHED_VIA = "REACHED_VIA"  # service -> load_balancer/dns/cdn: how traffic gets to it
 
 
 class RelationStrength(StrEnum):
