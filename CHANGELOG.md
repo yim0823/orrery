@@ -15,6 +15,21 @@ thing and its twin quietly not.
 
 ### Added
 
+- **`also_failed`: a real incident is usually not one thing dying.** Two disks go in the
+  same hour, an operator stops a process on four hosts, a rack loses both feeds. The
+  record says "these were down" and every one of them is **input** — the question is what
+  followed from all of them together, not whether one predicts the others.
+
+  Putting a co-failure in `observed` instead asks the engine to guess an independent
+  hardware failure from an unrelated one, which it cannot do and never claimed to. On the
+  first real corpus this was pointed at, that mistake turned two of eight incidents into
+  MISSes and read as an engine defect for a day. Recording them as `also_failed` — inputs,
+  applied in any order, since propagation is a monotone fixpoint — took recall from 67% to
+  100% on the same eight incidents without touching the engine.
+
+  The docstring on `trigger` already said "the trigger is the input, not a prediction". It
+  only ever allowed one.
+
 - **`REACHED_VIA`: a service nobody can reach is broken, however healthy its process is.**
   This came out of a real map rather than a design session. A game's load balancers were
   loaded into a world, the appliance carrying six of its VIPs was killed, and `simulate`

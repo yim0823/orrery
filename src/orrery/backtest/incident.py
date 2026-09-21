@@ -34,6 +34,25 @@ class Incident(BaseModel):
     trigger: str
     """Entity id where the incident started."""
 
+    also_failed: list[str] = []
+    """Other entities that failed at the same time, and not because of the trigger.
+
+    A real incident is usually not one thing dying. Two disks go in the same hour, an
+    operator stops a process on four hosts, a rack loses both feeds. The record says "these
+    were down" and every one of them is **input**: the question being asked is what followed
+    from all of them together, not whether one of them predicts the others.
+
+    Putting a co-failure in `observed` instead asks the engine to guess an independent
+    hardware failure from an unrelated one, which it cannot do and never claimed to. That
+    mistake cost two of eight incidents on the first real corpus this was pointed at, and
+    read as an engine defect until someone looked at what the records actually said.
+    """
+
+    @property
+    def failed(self) -> list[str]:
+        """Everything the record says went down as input — the trigger and its company."""
+        return [self.trigger, *self.also_failed]
+
     event: str = "down"
     """The event applied to the trigger. Matches the names behavior models react to."""
 

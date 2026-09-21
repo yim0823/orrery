@@ -120,10 +120,24 @@ def replay(incident: Incident) -> Comparison:
             f"it is refused rather than skipped."
         )
 
-    reach = set(blast_radius(world, incident.trigger).impacted)
+    missing_triggers = [eid for eid in incident.failed if eid not in world.g]
+    if missing_triggers:
+        raise KeyError(
+            f"{incident.id}: trigger entities missing from {incident.world}: "
+            f"{', '.join(sorted(missing_triggers))}."
+        )
+
+    reach: set[str] = set()
+    for eid in incident.failed:
+        reach |= set(blast_radius(world, eid).impacted)
 
     sim = world.fork()
-    propagate(sim, Event(incident.trigger, incident.event), elapsed_s=incident.elapsed_s)
+    # Order does not matter: propagation is a monotone fixpoint, so applying the second
+    # failure after the first settles reaches the same place as any other order.
+    for eid in incident.failed:
+        propagate(sim, Event(eid, incident.event), elapsed_s=incident.elapsed_s)
+
+    inputs = set(incident.failed)
 
     cmp = Comparison(
         incident_id=incident.id,
@@ -140,8 +154,8 @@ def replay(incident: Incident) -> Comparison:
         candidates = list(incident.observed)
 
     for eid in candidates:
-        if eid == incident.trigger:
-            continue  # the trigger is the input, not a prediction
+        if eid in inputs:
+            continue  # what failed is the input, not a prediction
         if eid not in incident.observed and not incident.assume_unlisted_up:
             cmp.skipped_unobserved += 1
             continue
@@ -158,12 +172,12 @@ def replay(incident: Incident) -> Comparison:
             e.id
             for e in sim.entities()
             if e.status is not world.entity(e.id).status
-            and e.id != incident.trigger
+            and e.id not in inputs
             and e.id not in incident.observed
         )
     cmp.skipped_unobserved += sum(
         1 for e in sim.entities()
-        if e.id not in incident.observed and e.id != incident.trigger
+        if e.id not in incident.observed and e.id not in inputs
         and not incident.assume_unlisted_up
     )
     return cmp
