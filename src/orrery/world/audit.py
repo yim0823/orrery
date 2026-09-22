@@ -175,10 +175,10 @@ def _label(world: World, entity_id: str) -> str:
 
     Ids are the stable handle a tool joins on; names are what the estate calls the thing.
     In a hand-written world they are nearly the same, so this looks like ceremony. On a
-    real map the id is `rack:2100` and the name is the room and position someone can walk
-    to, and a finding that prints the id makes the reader go look it up — which is the
-    moment they stop reading. The id is still on the line: it is the entity the finding
-    is about.
+    map built from an inventory the id is a database key and the name is the room and
+    position someone can walk to, and a finding that prints the key makes the reader go
+    look it up — which is the moment they stop reading. The id is still on the line: it is
+    the entity the finding is about.
     """
     return world.entity(entity_id).name or entity_id
 
