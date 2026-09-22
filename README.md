@@ -93,7 +93,7 @@ organization.
 | `orrery resolve <file.yaml>` | Propose entity-resolution candidates (never merges) |
 | `orrery check` | Is this map any good? Gaps and drift in the map itself |
 | `orrery spof` | What is most dangerous? Entities ranked by what goes with them |
-| `orrery diff <a> <b>` | What changed between two snapshots |
+| `orrery diff <a> <b>` | What changed between two snapshots — structure, and which findings appeared |
 | `orrery backtest <dir>` | Replay past incidents and score the engine against them |
 
 ## Two questions you have on day one

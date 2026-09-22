@@ -62,6 +62,24 @@ thing and its twin quietly not.
   on its members. `service REACHED_VIA load_balancer` points from dependent to
   depended-upon like every other edge.
 
+- **`orrery diff` now says what changed about the *findings*, not only about the graph.**
+  The first team to be shown a real map's findings said two things. They had not known
+  about them — and nothing watches for them. The second sentence is the harder one: a
+  report someone reads once is a report, and what they need is a line the morning
+  something becomes a single point of failure.
+
+  The structural diff cannot be that line. A service moving from two racks to one appears
+  in it as one host changing rack, which is what routine maintenance looks like, and
+  scrolls past. `audit_diff(before, after)` runs the audit on both snapshots and reports
+  findings that appeared, findings that resolved, and findings whose detail changed —
+  three machines in one rack becoming six is not new, but it is worse, and a watcher that
+  only had appeared/resolved would never mention it.
+
+  Folding gets its own line rather than being diffed. A check that crosses the pervasive
+  threshold has no individual findings on one side, so it would otherwise read as every
+  one of them resolving the day it folds and a flood of new ones the day it unfolds.
+  `folding_changed` names the check and the report says to compare the counts.
+
 ### Fixed
 
 - **A relation could never be confirmed by a second source.** `add_entity` merges

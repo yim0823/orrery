@@ -633,6 +633,25 @@ found by running the audit on a real map of fifteen thousand entities, where
 physical machine a cloud VM runs on — and buried the eleven findings worth acting on. The
 count and the share are still printed; only the enumeration is dropped.
 
+### Diffing the findings, not the graph — `audit_diff`
+
+`diff` answers *what changed in the map*. That is not the same sentence as *what changed
+about whether the map is alright*, and the second one is what a person wants at nine in the
+morning. A service moving from two racks to one shows up in the structural diff as one host
+changing rack — indistinguishable from maintenance, and scrolled past.
+
+`audit_diff(before, after)` audits both snapshots and reports findings that **appeared**,
+findings that **resolved**, and findings whose **detail changed**. The third case earns its
+place: three machines in one rack becoming six is not a new finding, it is a worse one, and
+a diff of only appeared/resolved is silent about it. `orrery diff` runs it automatically and
+appends the result, so the structural drift and the change in risk arrive together.
+
+Checks that cross the pervasive threshold are excluded from the comparison and reported as
+`folding_changed` instead. A folded check has no individual findings, so diffing it names
+every one of them as resolved the day it folds and as new the day it unfolds — a page of
+noise describing nothing but a threshold being crossed. The count is what moved, so the
+report says to compare the counts.
+
 `single_points_of_failure()` answers the other half — not "is the map wrong" but "where is
 the map most frightening". It ranks entities by how much goes down with them, and it is
 deliberately blind to declared redundancy, since redundancy that is recorded but not real is

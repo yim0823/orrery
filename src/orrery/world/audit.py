@@ -367,6 +367,101 @@ def _fold_pervasive(a: MapAudit, world: World) -> None:
 
 
 @dataclass
+class FindingChange:
+    check: str
+    entity_id: str
+    before: str | None
+    after: str | None
+
+
+@dataclass
+class AuditDiff:
+    """What the audit says now that it did not say before.
+
+    `diff` answers "what changed in the map". This answers "what changed about whether the
+    map is alright", and the two are not the same sentence. A service that moved from two
+    racks to one shows up in `diff` as one host changing rack, which reads as routine
+    maintenance; the thing that actually happened — it is now a single point of failure —
+    appears nowhere. Somebody watching the structural diff every morning would scroll past
+    it, which is the failure this exists to stop.
+    """
+
+    appeared: list[FindingChange] = field(default_factory=list)
+    resolved: list[FindingChange] = field(default_factory=list)
+    changed: list[FindingChange] = field(default_factory=list)
+    folding_changed: list[str] = field(default_factory=list)
+    """Checks that crossed the pervasive line in one direction or the other.
+
+    A folded check has no individual findings to compare, so every one of them would
+    otherwise read as "resolved" the day it folds, and as a flood of new findings the day
+    it unfolds. Neither happened. The fold itself is the news.
+    """
+
+    @property
+    def empty(self) -> bool:
+        return not (self.appeared or self.resolved or self.changed or self.folding_changed)
+
+    def to_dict(self) -> dict:
+        return {
+            "appeared": [vars(c) for c in self.appeared],
+            "resolved": [vars(c) for c in self.resolved],
+            "changed": [vars(c) for c in self.changed],
+            "folding_changed": self.folding_changed,
+        }
+
+    def summary(self) -> str:
+        if self.empty:
+            return "the audit says the same things it said before"
+        lines: list[str] = []
+        for title, rows in (("newly flagged", self.appeared), ("no longer flagged", self.resolved)):
+            if rows:
+                lines.append(f"{title} ({len(rows)})")
+                for c in rows:
+                    lines.append(f"  {c.check:<28} {c.entity_id:<34} {c.after or c.before or ''}")
+                lines.append("")
+        if self.changed:
+            lines.append(f"still flagged, but differently ({len(self.changed)})")
+            for c in self.changed:
+                lines.append(f"  {c.check:<28} {c.entity_id}")
+                lines.append(f"      was: {c.before}")
+                lines.append(f"      now: {c.after}")
+            lines.append("")
+        for check in self.folding_changed:
+            lines.append(
+                f"{check}: crossed the line where it stops being listed and starts being "
+                f"reported as a gap in the data — compare the counts, not the names"
+            )
+        return "\n".join(lines).rstrip()
+
+
+def audit_diff(before: MapAudit, after: MapAudit) -> AuditDiff:
+    """Which findings are new, which are gone, and which say something different.
+
+    Keyed on (check, entity), because that pair is the claim. The detail is the evidence
+    for it, so a detail that changed while the claim stands is worth a line of its own —
+    three places to run in one rack becoming six is not a new problem, but it is a bigger
+    one.
+    """
+    out = AuditDiff()
+    folded_before, folded_after = set(before.pervasive), set(after.pervasive)
+    out.folding_changed = sorted(folded_before ^ folded_after)
+    skip = folded_before | folded_after
+
+    def index(a: MapAudit) -> dict[tuple[str, str], str]:
+        return {(f.check, f.entity_id): f.detail for f in a.findings if f.check not in skip}
+
+    b, a2 = index(before), index(after)
+    for key in sorted(a2.keys() - b.keys()):
+        out.appeared.append(FindingChange(key[0], key[1], None, a2[key]))
+    for key in sorted(b.keys() - a2.keys()):
+        out.resolved.append(FindingChange(key[0], key[1], b[key], None))
+    for key in sorted(b.keys() & a2.keys()):
+        if b[key] != a2[key]:
+            out.changed.append(FindingChange(key[0], key[1], b[key], a2[key]))
+    return out
+
+
+@dataclass
 class Risk:
     entity_id: str
     kind: str

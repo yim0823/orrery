@@ -1,10 +1,12 @@
 from orrery.schema import EntityKind
 
 from .audit import (
+    AuditDiff,
     Finding,
     MapAudit,
     Risk,
     audit,
+    audit_diff,
     format_risks,
     single_points_of_failure,
 )
@@ -13,6 +15,7 @@ from .graph import World
 from .query import blast_radius, reach
 
 __all__ = [
+    "AuditDiff",
     "EntityChange",
     "EntityKind",
     "Finding",
@@ -21,6 +24,7 @@ __all__ = [
     "World",
     "WorldDiff",
     "audit",
+    "audit_diff",
     "blast_radius",
     "diff",
     "format_risks",

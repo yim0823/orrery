@@ -18,6 +18,7 @@ from orrery.world import (
     EntityKind,
     World,
     audit,
+    audit_diff,
     blast_radius,
     diff,
     format_risks,
@@ -234,11 +235,19 @@ def diff_cmd(before: pathlib.Path, after: pathlib.Path, json_out: bool = False):
     A map that drifts without anyone noticing is the failure mode every CMDB dies of.
     Run this between snapshots to see what appeared, vanished, or was rewired.
     """
-    d = diff(World.load(before), World.load(after))
+    w_before, w_after = World.load(before), World.load(after)
+    d = diff(w_before, w_after)
+    # What changed in the map, and what changed about whether the map is alright. The
+    # second is the one somebody watching every morning actually needs: a service moving
+    # from two racks to one reads as routine maintenance in the structural diff.
+    ad = audit_diff(audit(w_before), audit(w_after))
     if json_out:
-        _emit(d.to_dict())
+        _emit({**d.to_dict(), "audit": ad.to_dict()})
         return
     typer.echo(d.summary())
+    if not ad.empty:
+        typer.echo("")
+        typer.echo(ad.summary())
 
 
 @app.command()

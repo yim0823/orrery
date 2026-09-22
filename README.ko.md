@@ -120,7 +120,7 @@ relations:
 | `orrery resolve <file.yaml>` | 개체 해소 후보 제안 (절대 자동 병합하지 않음) |
 | `orrery check` | 이 지도가 쓸 만한가 — 지도 자체의 구멍과 어긋남 |
 | `orrery spof` | 무엇이 제일 위험한가 — 같이 죽는 것의 양으로 순위 |
-| `orrery diff <a> <b>` | 두 스냅샷 사이에 무엇이 달라졌나 |
+| `orrery diff <a> <b>` | 두 스냅샷 사이에 무엇이 달라졌나 — 구조, 그리고 새로 걸린 소견 |
 | `orrery backtest <dir>` | 과거 장애를 재생해 이 엔진을 채점 |
 
 모든 명령에 `--json-out`이 있습니다.
