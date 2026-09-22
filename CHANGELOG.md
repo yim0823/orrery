@@ -15,6 +15,19 @@ thing and its twin quietly not.
 
 ### Added
 
+- **A check that fires on most of what it looks at is one line, not a list.** Found by
+  pointing `check` at a real map of fifteen thousand entities: `no recorded placement`
+  fired on 2,400 of 4,604 virtual machines, because nobody records which physical machine
+  a cloud VM runs on. That is a gap in the data, not 2,400 defects, and printing it as
+  2,400 lines buried the eleven findings that were worth acting on.
+
+  It is the argument that already keeps a shared site quiet, arriving from the other
+  direction, so the threshold is stated rather than tuned: above half of the entities a
+  check applies to, and longer than the report would print anyway. The count and the share
+  stay in the output and in `--json-out`; only the enumeration goes. The denominator is
+  the kinds the check actually looked at — counting against the whole estate would let ten
+  thousand hosts dilute a check that only reads virtual machines.
+
 - **`also_failed`: a real incident is usually not one thing dying.** Two disks go in the
   same hour, an operator stops a process on four hosts, a rack loses both feeds. The
   record says "these were down" and every one of them is **input** — the question is what

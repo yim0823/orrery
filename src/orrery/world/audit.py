@@ -15,6 +15,7 @@ an organization, and organizations are legitimately strange.
 """
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, field
 
 import networkx as nx
@@ -25,6 +26,24 @@ from .graph import World
 
 _PLACEABLE = (EntityKind.SERVICE, EntityKind.DATABASE, EntityKind.NODE, EntityKind.VM)
 _ROOTS = (EntityKind.SITE, EntityKind.EXTERNAL, EntityKind.NETWORK_SEGMENT)
+
+PERVASIVE_SHARE = 0.5
+"""Above this share of the entities a check applies to, it is reported as one line.
+
+Half is a judgement, not a measurement. The argument for it: below half, a finding still
+describes exceptions, and exceptions are what someone can work through. Above half, the
+finding describes the normal state of the estate, and the thing worth saying is that the
+data is missing, not the name of every entity missing it.
+"""
+
+PERVASIVE_MIN = _LISTED_PER_CHECK = 15
+"""And it has to be longer than the report would print anyway.
+
+A share is meaningless on a small map: one finding out of two services is 50%, and the
+first version of this folded seven test fixtures into "a gap in the data" because of it.
+Folding exists to keep a long report readable, so the floor is the length at which the
+report stops printing names — below that, the list *is* the summary.
+"""
 
 
 @dataclass
@@ -42,6 +61,20 @@ class MapAudit:
     sources: dict[str, int] = field(default_factory=dict)
     single_sourced: int = 0
     cross_confirmed: int = 0
+    pervasive: dict[str, tuple[int, int]] = field(default_factory=dict)
+    """Checks that fired on most of what they could fire on: `check -> (hits, eligible)`.
+
+    A finding on half the estate is not a defect list, it is a fact about the estate, and
+    `check` already refuses to report two of those — a shared site, and a shared rack where
+    there is only one rack. This is the same argument arriving from the other direction: at
+    fifteen thousand entities, `no recorded placement` fired on 2,400 of 4,604 virtual
+    machines, because nobody records which physical machine a cloud VM runs on. Printing
+    2,400 lines does not tell anyone that. One line does, and the report stays readable
+    enough that the eleven findings worth acting on are still visible.
+
+    The count and the ratio are kept, so nothing is hidden — only the enumeration is
+    dropped. `PERVASIVE_SHARE` is where the line is drawn.
+    """
 
     def by_check(self) -> dict[str, list[Finding]]:
         out: dict[str, list[Finding]] = {}
@@ -56,6 +89,7 @@ class MapAudit:
             "sources": self.sources,
             "single_sourced": self.single_sourced,
             "cross_confirmed": self.cross_confirmed,
+            "pervasive": {k: {"hits": h, "eligible": e} for k, (h, e) in self.pervasive.items()},
             "findings": [
                 {"check": f.check, "id": f.entity_id, "detail": f.detail} for f in self.findings
             ],
@@ -73,16 +107,23 @@ class MapAudit:
                 f"{self.single_sourced:,} by exactly one"
             )
         lines.append("")
+        for check, (hit, eligible) in sorted(self.pervasive.items(), key=lambda kv: -kv[1][0]):
+            lines.append(
+                f"{check}: {hit:,} of {eligible:,} ({hit / eligible:.0%}) — not listed, "
+                f"because more than half is a gap in the data rather than a list of defects"
+            )
+        if self.pervasive:
+            lines.append("")
         groups = self.by_check()
-        if not groups:
+        if not groups and not self.pervasive:
             lines.append("nothing to flag")
             return "\n".join(lines)
         for check, items in sorted(groups.items(), key=lambda kv: -len(kv[1])):
             lines.append(f"{check} ({len(items)})")
-            for f in items[:15]:
+            for f in items[:_LISTED_PER_CHECK]:
                 lines.append(f"  {f.entity_id:<36} {f.detail}")
-            if len(items) > 15:
-                lines.append(f"  ... and {len(items) - 15} more")
+            if len(items) > _LISTED_PER_CHECK:
+                lines.append(f"  ... and {len(items) - _LISTED_PER_CHECK} more")
             lines.append("")
         return "\n".join(lines).rstrip()
 
@@ -292,7 +333,37 @@ def audit(world: World) -> MapAudit:
                     )
                 )
 
+    _fold_pervasive(a, world)
     return a
+
+
+def _fold_pervasive(a: MapAudit, world: World) -> None:
+    """Move any check that fired on most of its eligible entities out of the list.
+
+    Eligible means "of the kinds this check actually produced findings for" — a check that
+    only ever looks at virtual machines is not diluted by ten thousand hosts. Counting it
+    against the whole estate would let a pervasive gap hide under a big denominator, which
+    is the opposite of the point.
+    """
+    kinds_per_check: dict[str, set[EntityKind]] = {}
+    hits: dict[str, int] = {}
+    for f in a.findings:
+        kinds_per_check.setdefault(f.check, set()).add(world.entity(f.entity_id).kind)
+        hits[f.check] = hits.get(f.check, 0) + 1
+
+    population = Counter(e.kind for e in world.entities())
+    folded: set[str] = set()
+    for check, kinds in kinds_per_check.items():
+        eligible = sum(population[k] for k in kinds)
+        if (
+            hits[check] > PERVASIVE_MIN
+            and eligible
+            and hits[check] / eligible > PERVASIVE_SHARE
+        ):
+            a.pervasive[check] = (hits[check], eligible)
+            folded.add(check)
+    if folded:
+        a.findings = [f for f in a.findings if f.check not in folded]
 
 
 @dataclass

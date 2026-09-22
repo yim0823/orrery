@@ -623,6 +623,16 @@ one rack and one site, and saying all three turns one defect into three findings
 `site` is not reported at all: everything in one datacentre is a fact about the estate, and
 a finding on every service is how a report teaches people to skip it.
 
+**A check that fires on most of what it looks at is reported as one line, not a list.**
+`PERVASIVE_SHARE` is 0.5 and the floor is the number of names the report prints anyway. The
+argument is the same one that keeps a shared site quiet: below half, a finding describes
+exceptions, and exceptions are what someone can work through; above half, it describes the
+normal state of the estate, and what is worth saying is that the data is missing. This was
+found by running the audit on a real map of fifteen thousand entities, where
+`no recorded placement` fired on 2,400 of 4,604 virtual machines — nobody records which
+physical machine a cloud VM runs on — and buried the eleven findings worth acting on. The
+count and the share are still printed; only the enumeration is dropped.
+
 `single_points_of_failure()` answers the other half — not "is the map wrong" but "where is
 the map most frightening". It ranks entities by how much goes down with them, and it is
 deliberately blind to declared redundancy, since redundancy that is recorded but not real is
