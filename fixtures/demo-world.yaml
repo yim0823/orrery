@@ -2,7 +2,7 @@
 entities:
   - {id: site-a, kind: site, name: "Site A (IDC)"}
   - {id: site-b, kind: site, name: "Site B (cloud region)"}
-  - {id: rack-a1, kind: rack, name: "a1 (one PDU, one top-of-rack switch)"}
+  - {id: rack-a1, kind: rack, name: "a1"}   # one PDU, one top-of-rack switch
   - {id: rack-b1, kind: rack, name: "b1"}
   - {id: host-a1, kind: host, name: "a1", attrs: {cpu: 32, mem_gb: 128}}
   - {id: host-a2, kind: host, name: "a2", attrs: {cpu: 32, mem_gb: 128}}

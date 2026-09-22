@@ -80,6 +80,14 @@ thing and its twin quietly not.
   one of them resolving the day it folds and a flood of new ones the day it unfolds.
   `folding_changed` names the check and the report says to compare the counts.
 
+- **Findings name the shared machine or rack the way the estate names it.** A finding
+  that prints an inventory key is a correct sentence that sends the reader to look the key
+  up before they can do anything, and that is where they stop reading. The name is already
+  in the graph, and it is usually a room and a position someone can walk to. In a
+  hand-written world the id and the name are nearly the same, which is why this looked
+  fine until the audit was pointed at a map whose ids are database keys. The finding still
+  carries the id of the entity it is *about*.
+
 ### Fixed
 
 - **A relation could never be confirmed by a second source.** `add_entity` merges

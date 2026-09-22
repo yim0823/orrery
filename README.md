@@ -130,7 +130,7 @@ redundancy on paper only (1)
   svc-checkout                         replicas=2 but one place to run: losing it loses everything
 
 redundancy on one machine (1)
-  svc-search                           2 places to run, all of them on host-a3 — losing it loses all of them
+  svc-search                           2 places to run, all of them on a3 — losing it loses all of them
 
 isolated (1)
   svc-inventory-prod                   nothing connects to it — usually a join that failed, not a server nobody uses
@@ -220,7 +220,7 @@ fixture, not an illustration:
 
 ```
 redundancy on one machine (1)
-  svc-search    2 places to run, all of them on host-a3 — losing it loses all of them
+  svc-search    2 places to run, all of them on a3 — losing it loses all of them
 ```
 
 Two machines that share only a rack are the same defect with a different fix — move a
@@ -229,7 +229,7 @@ The shipped fixture does not contain this case; on a map that does, it reads:
 
 ```
 redundancy in one rack (1)
-  svc-orders    2 places to run on different machines, all in rack-a1 — one power feed, one top-of-rack switch
+  svc-orders    2 places to run on different machines, all in a1 — one power feed, one top-of-rack switch
 ```
 
 Only the nearest shared foundation is reported. A service on one hypervisor is also, by

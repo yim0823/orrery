@@ -158,7 +158,7 @@ redundancy on paper only (1)
   svc-checkout                         replicas=2 but one place to run: losing it loses everything
 
 redundancy on one machine (1)
-  svc-search                           2 places to run, all of them on host-a3 — losing it loses all of them
+  svc-search                           2 places to run, all of them on a3 — losing it loses all of them
 
 isolated (1)
   svc-inventory-prod                   nothing connects to it — usually a join that failed, not a server nobody uses
@@ -244,7 +244,7 @@ flowchart TB
 
 ```
 redundancy on one machine (1)
-  svc-search    2 places to run, all of them on host-a3 — losing it loses all of them
+  svc-search    2 places to run, all of them on a3 — losing it loses all of them
 ```
 
 물리 서버는 다른데 **랙만 같은** 경우는 같은 결함이지만 고치는 방법이 다릅니다 — 가상 머신을
@@ -253,7 +253,7 @@ redundancy on one machine (1)
 
 ```
 redundancy in one rack (1)
-  svc-orders    2 places to run on different machines, all in rack-a1 — one power feed, one top-of-rack switch
+  svc-orders    2 places to run on different machines, all in a1 — one power feed, one top-of-rack switch
 ```
 
 **가장 가까운 공통 바닥 하나만 보고합니다.** 하이퍼바이저 하나를 공유하는 서비스는 필연적으로

@@ -170,6 +170,19 @@ def _carriers(
     return result
 
 
+def _label(world: World, entity_id: str) -> str:
+    """What to call an entity in a finding a person has to act on.
+
+    Ids are the stable handle a tool joins on; names are what the estate calls the thing.
+    In a hand-written world they are nearly the same, so this looks like ceremony. On a
+    real map the id is `rack:2100` and the name is the room and position someone can walk
+    to, and a finding that prints the id makes the reader go look it up — which is the
+    moment they stop reading. The id is still on the line: it is the entity the finding
+    is about.
+    """
+    return world.entity(entity_id).name or entity_id
+
+
 def _shared_foundation(world: World, entity_id: str) -> tuple[str, int, EntityKind] | None:
     """Do all of this entity's places to run stand on one thing further down?
 
@@ -281,7 +294,8 @@ def audit(world: World) -> MapAudit:
                                 "redundancy in one rack",
                                 e.id,
                                 f"{places} places to run on different machines, all in "
-                                f"{where} — one power feed, one top-of-rack switch",
+                                f"{_label(world, where)} — one power feed, one "
+                                f"top-of-rack switch",
                             )
                         )
                 else:
@@ -289,8 +303,8 @@ def audit(world: World) -> MapAudit:
                         Finding(
                             "redundancy on one machine",
                             e.id,
-                            f"{places} places to run, all of them on {where} — "
-                            f"losing it loses all of them",
+                            f"{places} places to run, all of them on "
+                            f"{_label(world, where)} — losing it loses all of them",
                         )
                     )
 

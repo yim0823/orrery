@@ -558,7 +558,7 @@ def test_the_shipped_demo_world_actually_contains_the_trap_the_readme_describes(
     w = _demo()
     found = [f for f in audit(w).findings if f.check == "redundancy on one machine"]
     assert [f.entity_id for f in found] == ["svc-search"]
-    assert "host-a3" in found[0].detail
+    assert w.entity("host-a3").name in found[0].detail
 
 
 # ---- what the second adversarial pass found in the first pass's rack work ----
@@ -600,7 +600,7 @@ def test_the_shared_thing_is_found_four_levels_below_the_places():
     w = _world_from(DEEP.replace("RACK", "zz-rack-1"))
     found = [f for f in audit(w).findings if f.entity_id == "svc"]
     assert [f.check for f in found] == ["redundancy in one rack"]
-    assert "zz-rack-1" in found[0].detail
+    assert w.entity("zz-rack-1").name in found[0].detail
     assert "one power feed" in found[0].detail
 
 
@@ -675,7 +675,7 @@ def test_a_place_that_is_the_foundation_of_the_other_place_is_the_finding():
     w = _world_from(OVERLAP)
     found = [f for f in audit(w).findings if f.entity_id == "svc"]
     assert [f.check for f in found] == ["redundancy on one machine"]
-    assert "host-1" in found[0].detail
+    assert w.entity("host-1").name in found[0].detail
 
 
 ALTERNATIVES = """
@@ -733,7 +733,7 @@ def test_a_primary_and_its_replica_on_one_hypervisor_is_the_oldest_version_of_th
     w = _world_from(DB_ON_ONE_BOX)
     found = [f for f in audit(w).findings if f.entity_id == "db"]
     assert [f.check for f in found] == ["redundancy on one machine"]
-    assert "host-1" in found[0].detail
+    assert w.entity("host-1").name in found[0].detail
 
 
 def test_a_cycle_in_the_map_does_not_hang_the_audit():
@@ -768,3 +768,33 @@ def test_the_reason_column_never_contradicts_the_status_beside_it():
     for eff in effects:
         if eff.status is Status.DOWN:
             assert "degraded" not in eff.note, (eff.entity_id, eff.note)
+
+
+NAMELESS = """
+entities:
+  - {id: site, kind: site, name: site}
+  - {id: rack-1, kind: rack, name: rack1}
+  - {id: rack-2, kind: rack, name: rack2}
+  - {id: host-1, kind: host, name: ""}
+  - {id: n1, kind: node, name: n1}
+  - {id: n2, kind: node, name: n2}
+  - {id: svc, kind: service, name: lobby}
+relations:
+  - {src: rack-1, dst: site, kind: HOSTED_IN}
+  - {src: rack-2, dst: site, kind: HOSTED_IN}
+  - {src: host-1, dst: rack-1, kind: HOSTED_IN}
+  - {src: n1, dst: host-1, kind: RUNS_ON}
+  - {src: n2, dst: host-1, kind: RUNS_ON}
+  - {src: svc, dst: n1, kind: RUNS_ON}
+  - {src: svc, dst: n2, kind: RUNS_ON}
+"""
+
+
+def test_a_foundation_with_no_name_is_still_identified():
+    """Findings name the shared thing so the reader can go to it. Some connectors return
+    an entity with no name at all, and a finding that says "all of them on " is worse than
+    one that says the id."""
+    w = _world_from(NAMELESS)
+    found = [f for f in audit(w).findings if f.entity_id == "svc"]
+    assert [f.check for f in found] == ["redundancy on one machine"]
+    assert "host-1" in found[0].detail
