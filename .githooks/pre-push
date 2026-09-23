@@ -38,10 +38,31 @@ if [ ! -f "$DENYLIST" ]; then
 fi
 
 if ! uv run python scripts/check_identifiers.py --denylist "$DENYLIST" >/tmp/orrery-scan.txt 2>&1; then
-  echo "🔴 commit refused: forbidden identifiers found."
+  echo "🔴 push refused: forbidden identifiers found in the working tree."
   cat /tmp/orrery-scan.txt
   echo
   echo "   This repository is published. Keep that content outside it."
   exit 1
 fi
+
+# The tree scan cannot see what an earlier commit added and a later one removed: that is
+# still in the history this push publishes. Scan every commit being pushed, messages too.
+zero=0000000000000000000000000000000000000000
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue          # deleting a branch publishes nothing
+  if [ "$remote_sha" = "$zero" ]; then
+    range="$local_sha --not --remotes"            # new branch: whatever no remote has yet
+  else
+    range="$remote_sha..$local_sha"
+  fi
+  # shellcheck disable=SC2086
+  if ! uv run python scripts/check_identifiers.py --denylist "$DENYLIST" --git-range "$range" \
+      >/tmp/orrery-scan-range.txt 2>&1; then
+    echo "🔴 push refused: forbidden identifiers in commits being pushed ($local_ref)."
+    cat /tmp/orrery-scan-range.txt
+    echo
+    echo "   Rewrite those commits before pushing; removing the token in a new commit is not enough."
+    exit 1
+  fi
+done
 exit 0
