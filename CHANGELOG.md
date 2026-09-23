@@ -101,6 +101,15 @@ thing and its twin quietly not.
   handed, and a test now holds it to that. A few hundred incidents against a map of tens of
   thousands of entities went from over ten minutes, spent parsing the same file, to seconds.
 
+- **The clean-room guard scans what a push publishes, not only what the tree holds.**
+  Denylist lines starting with `re:` are regular expressions, for id formats and naming
+  schemes rather than remembered names. `--git-range` scans every commit message and author,
+  every added line including merge resolutions, every path, and refuses binary files unless a
+  denylist line `allow-binary:<glob>` lets one through; pre-push runs it over exactly the range
+  being pushed and scans annotated tag messages. The tree scan now also reads files with no
+  suffix and HTML. A name removed in a later commit is still in the history that goes out, and
+  a name in a file name or a PNG is published just the same.
+
 ### Fixed
 
 - **The README check read whatever snapshot was lying around.** The commands it compares read

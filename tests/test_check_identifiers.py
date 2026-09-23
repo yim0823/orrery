@@ -73,3 +73,59 @@ def test_a_forbidden_commit_message_is_caught(tmp_path):
     r = subprocess.run([sys.executable, script, "--denylist", str(deny), "--git-range", "HEAD"],
                        capture_output=True, text=True, cwd=tmp_path, check=False)
     assert r.returncode == 1
+
+
+def _repo(tmp_path):
+    g = ["git", "-C", str(tmp_path)]
+    subprocess.run([*g, "init", "-q"], check=True)
+    subprocess.run([*g, "config", "user.email", "t@example.com"], check=True)
+    subprocess.run([*g, "config", "user.name", "t"], check=True)
+    (tmp_path / "f.txt").write_text("base\n")
+    subprocess.run([*g, "add", "."], check=True)
+    subprocess.run([*g, "commit", "-qm", "base"], check=True)
+    return g
+
+
+def _range(tmp_path, deny, rng="HEAD"):
+    script = str((__import__("pathlib").Path(SCRIPT)).resolve())
+    return subprocess.run([sys.executable, script, "--denylist", str(deny), "--git-range", rng],
+                          capture_output=True, text=True, cwd=tmp_path, check=False)
+
+
+def test_a_bullet_line_in_a_message_a_path_and_a_binary_are_all_caught(tmp_path):
+    g = _repo(tmp_path)
+    deny = tmp_path / "deny.txt"
+    deny.write_text("secretcorp\n")
+    (tmp_path / "x.txt").write_text("fine\n")
+    subprocess.run([*g, "add", "."], check=True)
+    subprocess.run([*g, "commit", "-qm", "subject\n\n- mentions SecretCorp in a bullet"], check=True)
+    assert "message" in _range(tmp_path, deny).stdout
+    g2 = tmp_path / "secretcorp-notes.txt"
+    g2.write_text("fine\n")
+    subprocess.run([*g, "add", "."], check=True)
+    subprocess.run([*g, "commit", "-qm", "plain"], check=True)
+    assert "path" in _range(tmp_path, deny, "HEAD~1..HEAD").stdout
+    (tmp_path / "img.png").write_bytes(b"\x89PNG\x00\x01\x02secretcorp")
+    subprocess.run([*g, "add", "."], check=True)
+    subprocess.run([*g, "commit", "-qm", "img"], check=True)
+    r = _range(tmp_path, deny, "HEAD~1..HEAD")
+    assert r.returncode == 1 and "binary" in r.stdout
+    deny.write_text("secretcorp\nallow-binary:*.png\n")
+    assert _range(tmp_path, deny, "HEAD~1..HEAD").returncode == 0
+
+
+def test_an_added_line_that_itself_starts_with_plus_is_scanned(tmp_path):
+    g = _repo(tmp_path)
+    (tmp_path / "f.txt").write_text("base\n++ SecretCorp\n")
+    subprocess.run([*g, "commit", "-qam", "plus"], check=True)
+    deny = tmp_path / "deny.txt"
+    deny.write_text("secretcorp\n")
+    assert _range(tmp_path, deny, "HEAD~1..HEAD").returncode == 1
+
+
+def test_stdin_mode_scans_a_tag_message(tmp_path):
+    deny = tmp_path / "deny.txt"
+    deny.write_text("secretcorp\n")
+    r = subprocess.run([sys.executable, SCRIPT, "--denylist", str(deny), "--stdin"],
+                       input="tag v1\n\nfor SecretCorp\n", capture_output=True, text=True, check=False)
+    assert r.returncode == 1
