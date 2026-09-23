@@ -52,16 +52,17 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   [ "$local_sha" = "$zero" ] && continue          # deleting a branch publishes nothing
   case "$local_ref" in
     refs/tags/*)
-      # an annotated tag carries its own message; a lightweight tag is just a commit
-      if [ "$(git cat-file -t "$local_sha")" = "tag" ]; then
+      # an annotated tag carries its own message; a tag can point at another tag, so peel
+      # every level — a clean outer tag must not carry a dirty inner one through
+      while [ "$(git cat-file -t "$local_sha")" = "tag" ]; do
         if ! git cat-file -p "$local_sha" | uv run python scripts/check_identifiers.py \
             --denylist "$DENYLIST" --stdin >/tmp/orrery-scan-tag.txt 2>&1; then
           echo "🔴 push refused: forbidden identifiers in tag $local_ref."
           cat /tmp/orrery-scan-tag.txt
           exit 1
         fi
-        local_sha=$(git rev-parse "$local_sha^{commit}")
-      fi
+        local_sha=$(git cat-file -p "$local_sha" | sed -n 's/^object //p' | head -1)
+      done
       ;;
   esac
   if [ "$remote_sha" = "$zero" ]; then

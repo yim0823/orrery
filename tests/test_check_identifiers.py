@@ -129,3 +129,17 @@ def test_stdin_mode_scans_a_tag_message(tmp_path):
     r = subprocess.run([sys.executable, SCRIPT, "--denylist", str(deny), "--stdin"],
                        input="tag v1\n\nfor SecretCorp\n", capture_output=True, text=True, check=False)
     assert r.returncode == 1
+
+
+def test_a_korean_file_name_and_the_committer_are_scanned(tmp_path):
+    g = _repo(tmp_path)
+    deny = tmp_path / "deny.txt"
+    deny.write_text("비밀회사\n")
+    (tmp_path / "비밀회사-메모.txt").write_text("fine\n")
+    subprocess.run([*g, "add", "."], check=True)
+    subprocess.run([*g, "commit", "-qm", "plain"], check=True)
+    assert "path" in _range(tmp_path, deny, "HEAD~1..HEAD").stdout
+    deny.write_text("committer-corp\n")
+    subprocess.run([*g, "-c", "user.name=committer-corp", "commit", "-q", "--allow-empty", "-m", "x"],
+                   check=True)
+    assert "committer" in _range(tmp_path, deny, "HEAD~1..HEAD").stdout

@@ -106,8 +106,9 @@ thing and its twin quietly not.
   schemes rather than remembered names. `--git-range` scans every commit message and author,
   every added line including merge resolutions, every path, and refuses binary files unless a
   denylist line `allow-binary:<glob>` lets one through; pre-push runs it over exactly the range
-  being pushed and scans annotated tag messages. The tree scan now also reads files with no
-  suffix and HTML. A name removed in a later commit is still in the history that goes out, and
+  being pushed and scans annotated tag messages, peeling tags of tags. Committers are scanned
+  as well as authors, and non-ASCII file names are read unquoted. The tree scan now also reads
+  files with no suffix and HTML. A name removed in a later commit is still in the history that goes out, and
   a name in a file name or a PNG is published just the same.
 
 ### Fixed

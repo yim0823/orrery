@@ -77,7 +77,9 @@ def scan(root: pathlib.Path, entries) -> list[tuple[str, int, str]]:
 
 
 def _git(*args: str) -> str:
-    return subprocess.run(["git", *args], capture_output=True, text=True, check=True).stdout
+    # quotepath 를 끄지 않으면 한글 파일명이 8진수 이스케이프로 나와 어떤 항목에도 안 맞는다
+    return subprocess.run(["git", "-c", "core.quotepath=off", *args], capture_output=True, text=True,
+                          check=True).stdout
 
 
 def scan_range(rev_range: str, entries) -> list[tuple[str, int, str]]:
@@ -90,11 +92,11 @@ def scan_range(rev_range: str, entries) -> list[tuple[str, int, str]]:
             hits.append((where, i, label))
 
     # 1. messages and authors, unfiltered — a bullet line starting with "- " is still published
-    for block in _git("log", "--format=%H%x00%an <%ae>%x00%B%x01", *revs).split("\x01"):
+    for block in _git("log", "--format=%H%x00%an <%ae> / %cn <%ce>%x00%B%x01", *revs).split("\x01"):
         if not block.strip():
             continue
         sha, author, body = (block.strip("\n").split("\x00") + ["", ""])[:3]
-        check(f"commit {sha[:9]} author", 0, author)
+        check(f"commit {sha[:9]} author/committer", 0, author)
         for i, line in enumerate(body.splitlines(), 1):
             check(f"commit {sha[:9]} message", i, line)
     # 2. added lines, merge resolutions included (--cc). Only the diff markers are stripped:
@@ -116,8 +118,9 @@ def scan_range(rev_range: str, entries) -> list[tuple[str, int, str]]:
             continue
         check(f"commit {sha}", i, content)
     # 3. paths
-    for path in set(_git("log", "--name-only", "--format=", *revs).split()):
-        check("path", 0, path)
+    for path in set(_git("log", "--name-only", "--format=", *revs).splitlines()):
+        if path.strip():
+            check("path", 0, path)
     # 4. binaries — their content cannot be scanned, so they are refused unless allowed
     import fnmatch
     for line in _git("log", "--numstat", "--format=", *revs).splitlines():
