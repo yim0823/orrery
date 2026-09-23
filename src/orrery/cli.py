@@ -271,6 +271,7 @@ def check(world: pathlib.Path | None = None, json_out: bool = False):
 def spof(
     limit: int = 20,
     kind: str | None = None,
+    include_sites: bool = False,
     world: pathlib.Path | None = None,
     json_out: bool = False,
 ):
@@ -278,6 +279,11 @@ def spof(
 
     Structural reach, not predicted damage — it deliberately ignores replicas, because
     redundancy that is recorded but not real is exactly what this is for finding.
+
+    Sites are left out unless asked for (`--include-sites`, or `--kind site`). Everything
+    in a datacentre goes with it, which is true and puts every site at the top of the list
+    in order of size, above the one hypervisor carrying six services that someone could
+    actually move this week.
     """
     w = _load(world)
     if kind and kind not in {k.value for k in EntityKind}:
@@ -285,11 +291,23 @@ def spof(
             f"unknown kind {kind!r}. Known: {', '.join(k.value for k in EntityKind)}"
         )
     kinds = (EntityKind(kind),) if kind else None
-    risks = single_points_of_failure(w, limit=limit, kinds=kinds)
+    exclude = () if (include_sites or kind) else (EntityKind.SITE,)
+    risks = single_points_of_failure(w, limit=limit, kinds=kinds, exclude_kinds=exclude)
+    # Count only the sites that would have been ranked, so "N left out" is the number the
+    # flag would bring back, not every datacentre the map happens to name.
+    sites = (
+        len(single_points_of_failure(w, limit=len(w), kinds=(EntityKind.SITE,))) if exclude else 0
+    )
     if json_out:
-        _emit({"total": len(w), "risks": [r.to_dict() for r in risks]})
+        _emit({"total": len(w), "sites_left_out": sites, "risks": [r.to_dict() for r in risks]})
         return
-    typer.echo(format_risks(risks, len(w)))
+    note = (
+        f"{sites} site(s) left out — everything in a datacentre goes with it; "
+        f"--include-sites to rank them"
+        if sites
+        else ""
+    )
+    typer.echo(format_risks(risks, len(w), note))
 
 
 @app.command()

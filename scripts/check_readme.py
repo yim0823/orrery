@@ -5,9 +5,12 @@ something else, and stops trusting the rest of the page. CI runs this.
 """
 from __future__ import annotations
 
+import os
 import pathlib
+import shutil
 import subprocess
 import sys
+import tempfile
 
 CHECKS = [
     (["blast", "host-a1"], "$ orrery blast host-a1"),
@@ -37,14 +40,37 @@ def block_after(readme: str, marker: str) -> list[str]:
     return [line.rstrip() for line in readme[start:end].strip("\n").splitlines()]
 
 
-def actual(args: list[str]) -> list[str]:
+def actual(args: list[str], cwd: pathlib.Path) -> list[str]:
     out = subprocess.run(
-        ["orrery", *args], capture_output=True, text=True, check=True
+        ["orrery", *args], capture_output=True, text=True, check=True, cwd=cwd
     ).stdout
     return [line.rstrip() for line in out.strip("\n").splitlines()]
 
 
+def sandbox() -> pathlib.Path:
+    """A fresh directory holding the fixtures and a world ingested from them, nothing else.
+
+    The commands read the snapshot in the working directory. Run from the repo, they read
+    whatever the last `orrery ingest` left there — which, on a laptop, is a snapshot from
+    before the fixture changed, and the check then passes against a world nobody ships.
+    It did: a renamed rack printed its old name for a day and this said the README matched.
+    """
+    root = pathlib.Path(tempfile.mkdtemp(prefix="orrery-readme-"))
+    shutil.copytree("fixtures", root / "fixtures")
+    subprocess.run(["orrery", "ingest", "fixtures/demo-world.yaml"], cwd=root, check=True,
+                   capture_output=True, env={**os.environ})
+    return root
+
+
 def main() -> int:
+    root = sandbox()
+    try:
+        return _check(root)
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+def _check(root: pathlib.Path) -> int:
     failures = []
     checked = 0
     for name in READMES:
@@ -54,7 +80,7 @@ def main() -> int:
                 continue  # a translation need not carry every example
             checked += 1
             want = [line for line in block_after(readme, marker) if line.strip()]
-            got = [line for line in actual(args) if line.strip()]
+            got = [line for line in actual(args, root) if line.strip()]
             if want != got:
                 failures.append(
                     f"{name}: {' '.join(args)}\n  the README says:\n"

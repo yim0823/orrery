@@ -2,11 +2,11 @@
 
 `check` already refuses to report two of those: a shared site, and a shared rack where
 there is only one rack. This is the same argument arriving from the other direction, and
-it was found by running the audit on a real map rather than by thinking about it. At
-fifteen thousand entities, `no recorded placement` fired on 2,400 of 4,604 virtual
-machines — not because 2,400 things are broken, but because nobody records which physical
-machine a cloud VM runs on. Printing 2,400 lines does not say that. It buries the eleven
-findings that were worth acting on.
+it was found by running the audit on a real map rather than by thinking about it. On a
+production estate, `no recorded placement` fired on more than half of the virtual
+machines — not because thousands of things are broken, but because nobody records which
+physical machine a cloud VM runs on. Printing every one of them does not say that. It
+buries the few findings that were worth acting on.
 """
 from __future__ import annotations
 

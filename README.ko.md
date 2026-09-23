@@ -135,17 +135,23 @@ $ orrery spof --limit 5
 
 single points of failure, by what goes with them (26 entities)
 
-    1. site-a        16 (64.0%)  site
-    2. rack-a1       15 (60.0%)  rack
-    3. k8s-main       9 (36.0%)  cluster
-    4. etcd           6 (24.0%)  cluster
-    5. host-a3        6 (24.0%)  host
+    1. rack-a1       15 (60.0%)  rack  a1
+    2. k8s-main       9 (36.0%)  cluster  main
+    3. etcd           6 (24.0%)  cluster  etcd (quorum 2 of 3)
+    4. host-a3        6 (24.0%)  host  a3
+    5. host-a1        5 (20.0%)  host  a1
+
+2 site(s) left out — everything in a datacentre goes with it; --include-sites to rank them
 ```
 
 **구조적으로 닿는 범위이고, 적어 놓은 이중화는 일부러 무시합니다.** 적혀만 있고 실제로는 아닌
-이중화를 드러내는 것이 이 목록의 목적이기 때문입니다. 5위의 `host-a3`가 그 예입니다 — 쿠버네티스가
+이중화를 드러내는 것이 이 목록의 목적이기 때문입니다. 4위의 `host-a3`가 그 예입니다 — 쿠버네티스가
 서로 독립이라고 믿는 노드 두 개를 물리 서버 한 대가 받치고 있습니다.
 [아래에서 설명합니다](#사람들이-빠뜨리는-층-클러스터가-무엇-위에-서-있나).
+
+IDC는 따로 묻지 않으면 빠집니다(`--include-sites`). 실제 규모의 지도에서는 안 빼면 목록 맨 위가
+IDC 전부로 채워집니다. 맞는 말이지만 이번 주에 누가 손댈 수 있는 게 아닙니다. `check` 가 IDC 공유를
+보고하지 않는 것과 같은 이유입니다.
 
 ```
 $ orrery check

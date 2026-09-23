@@ -16,10 +16,10 @@ thing and its twin quietly not.
 ### Added
 
 - **A check that fires on most of what it looks at is one line, not a list.** Found by
-  pointing `check` at a real map of fifteen thousand entities: `no recorded placement`
-  fired on 2,400 of 4,604 virtual machines, because nobody records which physical machine
-  a cloud VM runs on. That is a gap in the data, not 2,400 defects, and printing it as
-  2,400 lines buried the eleven findings that were worth acting on.
+  pointing `check` at a real map of a production estate: `no recorded placement` fired on
+  more than half of its virtual machines, because nobody records which physical machine a
+  cloud VM runs on. That is a gap in the data, not thousands of defects, and printing it
+  line by line buried the handful of findings that were worth acting on.
 
   It is the argument that already keeps a shared site quiet, arriving from the other
   direction, so the threshold is stated rather than tuned: above half of the entities a
@@ -88,7 +88,25 @@ thing and its twin quietly not.
   fine until the audit was pointed at a map whose ids are database keys. The finding still
   carries the id of the entity it is *about*.
 
+- **`orrery spof` leaves sites out unless asked.** On the first real estate it ran on,
+  nearly the whole top of the list was datacentres, in order of size. True, and nothing anyone can
+  act on this week — it buried the hypervisor carrying six services that someone could move.
+  It is the argument that has always kept `check` quiet about a shared site. `--include-sites`
+  or `--kind site` brings them back, the output says how many were left out, and the library
+  function still ranks everything unless the caller passes `exclude_kinds`. The ranking also
+  prints each entity's name when it differs from the id, for the same reason findings do.
+
+- **A backtest loads each world once.** `replay` takes an already-loaded world and
+  `backtest` shares one per distinct snapshot. A replay only reads and forks the world it is
+  handed, and a test now holds it to that. A few hundred incidents against a map of tens of
+  thousands of entities went from over ten minutes, spent parsing the same file, to seconds.
+
 ### Fixed
+
+- **The README check read whatever snapshot was lying around.** The commands it compares read
+  the world in the working directory, so run from a laptop they read the last `orrery ingest`
+  left there. A renamed rack printed its old name for a day while the check reported that the
+  README matched. It now ingests the fixture into a fresh directory and runs everything there.
 
 - **A relation could never be confirmed by a second source.** `add_entity` merges
   provenance, and its docstring says merging is the point, because that is how something

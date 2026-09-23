@@ -66,11 +66,11 @@ class MapAudit:
 
     A finding on half the estate is not a defect list, it is a fact about the estate, and
     `check` already refuses to report two of those — a shared site, and a shared rack where
-    there is only one rack. This is the same argument arriving from the other direction: at
-    fifteen thousand entities, `no recorded placement` fired on 2,400 of 4,604 virtual
+    there is only one rack. This is the same argument arriving from the other direction: on
+    a production estate, `no recorded placement` fired on more than half of the virtual
     machines, because nobody records which physical machine a cloud VM runs on. Printing
-    2,400 lines does not tell anyone that. One line does, and the report stays readable
-    enough that the eleven findings worth acting on are still visible.
+    thousands of lines does not tell anyone that. One line does, and the report stays
+    readable enough that the few findings worth acting on are still visible.
 
     The count and the ratio are kept, so nothing is hidden — only the enumeration is
     dropped. `PERVASIVE_SHARE` is where the line is drawn.
@@ -557,7 +557,10 @@ def _reach_sizes(world: World) -> dict[str, int]:
 
 
 def single_points_of_failure(
-    world: World, limit: int = 20, kinds: tuple[EntityKind, ...] | None = None
+    world: World,
+    limit: int = 20,
+    kinds: tuple[EntityKind, ...] | None = None,
+    exclude_kinds: tuple[EntityKind, ...] = (),
 ) -> list[Risk]:
     """Rank entities by how much goes with them.
 
@@ -568,6 +571,12 @@ def single_points_of_failure(
 
     One pass over the whole graph regardless of how many entities are ranked, so
     narrowing by `kinds` filters the output rather than saving work.
+
+    `exclude_kinds` exists for the datacentre. On a real estate the top of this list is
+    every site, in order of size — true, and nothing anyone can act on this week. It is the
+    argument that keeps `check` quiet about a shared site, and the CLI leaves sites out by
+    default for the same reason. The library does not, because a caller asking for the
+    ranking deserves the whole ranking unless it says otherwise.
 
     **Scale.** Measured on one laptop: 25k entities in 0.3 s and 130 MB, 127k in 5.5 s and
     1.3 GB. The memory is the binding limit, not the time — reach is held as one bit per
@@ -581,19 +590,31 @@ def single_points_of_failure(
     out = [
         Risk(e.id, e.kind.value, e.name, sizes[e.id], sizes[e.id] / total)
         for e in world.entities()
-        if sizes.get(e.id) and not (kinds and e.kind not in kinds)
+        if sizes.get(e.id)
+        and not (kinds and e.kind not in kinds)
+        and e.kind not in exclude_kinds
     ]
     out.sort(key=lambda r: (-r.reach, r.entity_id))
     return out[:limit]
 
 
-def format_risks(risks: list[Risk], total_entities: int) -> str:
+def format_risks(risks: list[Risk], total_entities: int, left_out: str = "") -> str:
     if not risks:
+        if left_out:
+            # Only what was left out reaches anything. Saying "no dependency edges yet"
+            # here would be false, and it would hide the note that explains the silence.
+            return f"nothing that was ranked reaches anything else\n\n{left_out}"
         return "nothing reaches anything else — the map has no dependency edges yet"
     lines = [f"single points of failure, by what goes with them ({total_entities:,} entities)", ""]
     width = max(len(r.entity_id) for r in risks)
     for i, r in enumerate(risks, 1):
+        # The name, when it says something the id does not. On an inventory-built map the
+        # id is a database key, and a ranking of keys sends the reader to look each one up.
+        name = f"  {r.name}" if r.name and r.name != r.entity_id else ""
         lines.append(
-            f"  {i:>3}. {r.entity_id:<{width}}  {r.reach:>6,} ({r.share * 100:4.1f}%)  {r.kind}"
+            f"  {i:>3}. {r.entity_id:<{width}}  {r.reach:>6,} ({r.share * 100:4.1f}%)  "
+            f"{r.kind}{name}"
         )
+    if left_out:
+        lines += ["", left_out]
     return "\n".join(lines)

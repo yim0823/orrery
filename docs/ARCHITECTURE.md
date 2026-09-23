@@ -628,9 +628,9 @@ a finding on every service is how a report teaches people to skip it.
 argument is the same one that keeps a shared site quiet: below half, a finding describes
 exceptions, and exceptions are what someone can work through; above half, it describes the
 normal state of the estate, and what is worth saying is that the data is missing. This was
-found by running the audit on a real map of fifteen thousand entities, where
-`no recorded placement` fired on 2,400 of 4,604 virtual machines — nobody records which
-physical machine a cloud VM runs on — and buried the eleven findings worth acting on. The
+found by running the audit on a map of a production estate, where
+`no recorded placement` fired on more than half of the virtual machines — nobody records
+which physical machine a cloud VM runs on — and buried the few findings worth acting on. The
 count and the share are still printed; only the enumeration is dropped.
 
 ### Diffing the findings, not the graph — `audit_diff`

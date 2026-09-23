@@ -108,9 +108,15 @@ def _classify(predicted: Status, actual: Status) -> Outcome:
     return Outcome.UNDERSTATED if p < a else Outcome.OVERSTATED
 
 
-def replay(incident: Incident) -> Comparison:
-    """Run the engine over the incident's world and grade it against what was observed."""
-    world = World.load(incident.world)
+def replay(incident: Incident, world: World | None = None) -> Comparison:
+    """Run the engine over the incident's world and grade it against what was observed.
+
+    `world` is the already-loaded snapshot the incident names, for a caller replaying many
+    incidents against one map. It is only ever read and forked, never changed, so one copy
+    serves them all. Loading it per incident was the whole cost of a real backtest: a few
+    hundred incidents against a large map spent over ten minutes parsing the same file.
+    """
+    world = World.load(incident.world) if world is None else world
 
     unknown = [eid for eid in incident.observed if eid not in world.g]
     if unknown:

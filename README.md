@@ -107,17 +107,23 @@ $ orrery spof --limit 5
 
 single points of failure, by what goes with them (26 entities)
 
-    1. site-a        16 (64.0%)  site
-    2. rack-a1       15 (60.0%)  rack
-    3. k8s-main       9 (36.0%)  cluster
-    4. etcd           6 (24.0%)  cluster
-    5. host-a3        6 (24.0%)  host
+    1. rack-a1       15 (60.0%)  rack  a1
+    2. k8s-main       9 (36.0%)  cluster  main
+    3. etcd           6 (24.0%)  cluster  etcd (quorum 2 of 3)
+    4. host-a3        6 (24.0%)  host  a3
+    5. host-a1        5 (20.0%)  host  a1
+
+2 site(s) left out — everything in a datacentre goes with it; --include-sites to rank them
 ```
 
 Structural reach, and deliberately blind to any declared redundancy — redundancy that is
-recorded but not real is exactly what this list exists to surface. `host-a3` in fifth
+recorded but not real is exactly what this list exists to surface. `host-a3` in fourth
 place is one physical server carrying two Kubernetes nodes that the cluster believes are
 independent; see [the layer people forget](#the-layer-people-forget-what-the-cluster-is-standing-on).
+
+Sites are left out unless you ask (`--include-sites`). On a real estate the top of
+the list is otherwise every datacentre in order of size — true, and nothing anyone
+can act on this week. It is the same reason `check` does not report a shared site.
 
 ```console
 $ orrery check

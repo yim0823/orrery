@@ -1,7 +1,10 @@
 """Aggregate replays into a report you can put in front of someone."""
 from __future__ import annotations
 
+import pathlib
 from dataclasses import dataclass, field
+
+from orrery.world import World
 
 from .incident import Incident
 from .replay import Comparison, Outcome, replay
@@ -78,7 +81,20 @@ class Report:
         return self.total(Outcome.HIT) / broken
 
 def run(incidents: list[Incident]) -> Report:
-    return Report(comparisons=[replay(i) for i in incidents])
+    """Replay each incident, loading each distinct world once.
+
+    A corpus usually names one snapshot for every incident, and `replay` only reads and
+    forks the world it is given, so sharing it cannot let one incident's damage leak into
+    the next. The key is the resolved path: two spellings of one file are one world.
+    """
+    worlds: dict[str, World] = {}
+    comparisons = []
+    for i in incidents:
+        key = str(pathlib.Path(i.world).resolve())
+        if key not in worlds:
+            worlds[key] = World.load(i.world)
+        comparisons.append(replay(i, worlds[key]))
+    return Report(comparisons=comparisons)
 
 
 def _pct(v: float | None) -> str:
