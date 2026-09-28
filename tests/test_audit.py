@@ -212,3 +212,20 @@ def test_spof_kind_filter_works_through_the_cli():
     result = runner.invoke(app, ["spof", "--kind", "site", "--json-out"])
     assert result.exit_code == 0, result.output
     assert all(r["kind"] == "site" for r in json.loads(result.stdout)["risks"])
+
+
+
+def test_a_name_reached_through_a_load_balancer_is_not_floating_when_it_also_needs_a_cert():
+    w = World()
+    w.add_entity(Entity(id="lb", kind=EntityKind.LOAD_BALANCER, name="lb"))
+    w.add_entity(Entity(id="cert", kind=EntityKind.CERTIFICATE, name="cert"))
+    w.add_entity(Entity(id="name", kind=EntityKind.DNS, name="name"))
+    w.add_relation(Relation(src="name", dst="lb", kind=RelationKind.REACHED_VIA))
+    w.add_relation(Relation(src="name", dst="cert", kind=RelationKind.DEPENDS_ON))
+    assert "floating" not in _for(w, "name")
+    # without the way in it is floating: something depends on nothing that places it
+    w2 = World()
+    w2.add_entity(Entity(id="cert", kind=EntityKind.CERTIFICATE, name="cert"))
+    w2.add_entity(Entity(id="name", kind=EntityKind.DNS, name="name"))
+    w2.add_relation(Relation(src="name", dst="cert", kind=RelationKind.DEPENDS_ON))
+    assert "floating" in _for(w2, "name")

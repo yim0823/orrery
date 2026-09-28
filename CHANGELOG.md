@@ -135,6 +135,11 @@ thing and its twin quietly not.
 
 ### Fixed
 
+- **A name reached through a load balancer was called "floating" once it also needed a
+  certificate.** The floating check counted hosting, placement and membership as somewhere to
+  be, but not a way in. A DNS name has nowhere to run; it exists as the paths that reach it.
+  Adding one dependency to such a name turned a correctly wired record into a finding, and on
+  a real estate that was hundreds of findings about nothing. `REACHED_VIA` now counts.
 - **The README check read whatever snapshot was lying around.** The commands it compares read
   the world in the working directory, so run from a laptop they read the last `orrery ingest`
   left there. A renamed rack printed its old name for a day while the check reported that the

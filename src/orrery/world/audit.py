@@ -333,9 +333,17 @@ def audit(world: World) -> MapAudit:
     for e in world.entities():
         if e.kind in _ROOTS:
             continue
+        # A way in is a place too. A DNS name has nowhere to run and needs none: it exists as the
+        # paths that reach it. Leaving REACHED_VIA out called every name that also leans on a
+        # certificate "floating" — hundreds of findings about records that are wired correctly.
         if not any(
             world.out_edges(e.id, k)
-            for k in (RelationKind.HOSTED_IN, RelationKind.RUNS_ON, RelationKind.MEMBER_OF)
+            for k in (
+                RelationKind.HOSTED_IN,
+                RelationKind.RUNS_ON,
+                RelationKind.MEMBER_OF,
+                RelationKind.REACHED_VIA,
+            )
         ):
             depends_only = world.out_edges(e.id, RelationKind.DEPENDS_ON)
             if depends_only:
