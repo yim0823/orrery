@@ -27,6 +27,13 @@ def _impact_edges():
     return _DEPENDENT_EDGES
 
 
+def _upward():
+    """Member → quorum group, the one consequence that travels up an edge. Same rule as `propagate`."""
+    from orrery.sim.propagate import quorum_groups
+
+    return quorum_groups
+
+
 def _crosses():
     """Not every edge in the list carries consequence from every kind — see the predicate.
 
@@ -60,13 +67,14 @@ def reach(world: World, root: str) -> set[str]:
     """
     if root not in world.g:
         raise KeyError(root)
-    kinds = _impact_edges()
+    crosses, up = _crosses(), _upward()
     seen: set[str] = set()
     frontier = [root]
     while frontier:
         nxt: list[str] = []
         for cur in frontier:
-            for dep in world.dependents(cur, kinds):
+            kinds = tuple(k for k in _impact_edges() if crosses(k, world.entity(cur).kind))
+            for dep in list(world.dependents(cur, kinds)) + up(world, cur):
                 if dep != root and dep not in seen:
                     seen.add(dep)
                     nxt.append(dep)
@@ -84,7 +92,7 @@ def blast_radius(world: World, root: str, max_hops: int | None = None) -> BlastR
     while frontier and (max_hops is None or hop < max_hops):
         hop += 1
         nxt: list[str] = []
-        crosses = _crosses()
+        crosses, up = _crosses(), _upward()
         for cur in frontier:
             cur_kind = world.entity(cur).kind
             for kind in _impact_edges():
@@ -96,5 +104,11 @@ def blast_radius(world: World, root: str, max_hops: int | None = None) -> BlastR
                     br.impacted[dependent] = hop
                     br.paths[dependent] = br.paths[cur] + [dependent]
                     nxt.append(dependent)
+            for group in up(world, cur):
+                if group == root or group in br.impacted:
+                    continue
+                br.impacted[group] = hop
+                br.paths[group] = br.paths[cur] + [group]
+                nxt.append(group)
         frontier = nxt
     return br

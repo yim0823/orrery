@@ -93,3 +93,57 @@ def test_running_out_of_places_and_running_out_of_paths_are_told_apart(tmp_path)
     effects = propagate(w, Event("appliance-a", "down"))
     note = next(e.note for e in effects if e.entity_id == "svc")
     assert "ways in" in note and "place" not in note
+
+
+# ── quorum membership read upward ─────────────────────────────────────────────
+
+def _consensus_world():
+    """Three nodes voting in an etcd-like group (quorum 2), an API that needs it."""
+    from orrery.schema.entities import Entity, Relation
+    from orrery.world import World
+    w = World()
+    for n in ("n1", "n2", "n3"):
+        w.add_entity(Entity(id=n, kind="host", name=n))
+    w.add_entity(Entity(id="etcd", kind="service", name="etcd", attrs={"quorum": 2}))
+    for n in ("n1", "n2", "n3"):
+        w.add_relation(Relation(src=n, dst="etcd", kind="MEMBER_OF"))
+    w.add_entity(Entity(id="api", kind="service", name="api"))
+    w.add_relation(Relation(src="api", dst="etcd", kind="DEPENDS_ON", strength="hard"))
+    w.add_entity(Entity(id="pool", kind="load_balancer", name="pool"))  # no quorum: thinner, not gone
+    w.add_relation(Relation(src="n1", dst="pool", kind="MEMBER_OF"))
+    return w
+
+
+def test_a_quorum_member_reaches_its_group_in_spof_blast_and_reach():
+    from orrery.world.audit import _reach_sizes
+    from orrery.world.query import blast_radius, reach
+    w = _consensus_world()
+    assert _reach_sizes(w)["n1"] == 2  # etcd and the api on it
+    br = blast_radius(w, "n1")
+    assert br.impacted == {"etcd": 1, "api": 2} and br.paths["api"] == ["n1", "etcd", "api"]
+    assert reach(w, "n1") == {"etcd", "api"}
+
+
+def test_a_group_without_quorum_is_not_reached_by_its_member():
+    from orrery.world.query import blast_radius, reach
+    w = _consensus_world()
+    assert "pool" not in blast_radius(w, "n1").impacted and "pool" not in reach(w, "n1")
+
+
+def test_structural_reach_agrees_with_simulate_on_what_a_quorum_loss_takes():
+    from orrery.sim.propagate import Event, propagate
+    from orrery.world.query import reach
+    w = _consensus_world()
+    sim = w.fork()
+    for n in ("n1", "n2"):
+        propagate(sim, Event(n, "down"))
+    stopped = {e.id for e in sim.entities() if e.status.value == "down"} - {"n1", "n2"}
+    assert stopped <= reach(w, "n1") | reach(w, "n2")
+
+
+def test_reach_does_not_send_a_load_balancers_death_down_to_its_pool():
+    """`reach` skipped the kind check that `blast_radius` and `spof` make — a load balancer
+    dying leaves its backends running."""
+    from orrery.world.query import blast_radius, reach
+    w = _consensus_world()
+    assert reach(w, "pool") == set(blast_radius(w, "pool").impacted) == set()

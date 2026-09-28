@@ -515,7 +515,7 @@ def _reach_sizes(world: World) -> dict[str, int]:
     string at a time. Same answer, and the cost stops being the thing that decides
     whether anyone runs the command.
     """
-    from orrery.sim.propagate import _DEPENDENT_EDGES, consequence_crosses
+    from orrery.sim.propagate import _DEPENDENT_EDGES, consequence_crosses, quorum_groups
 
     ids = [e.id for e in world.entities()]
     index = {eid: i for i, eid in enumerate(ids)}
@@ -532,6 +532,9 @@ def _reach_sizes(world: World) -> dict[str, int]:
         )
         for dep in world.dependents(eid, kinds):
             g.add_edge(eid, dep)
+        # And the one consequence that travels up: a voting member can take its group down
+        for group in quorum_groups(world, eid):
+            g.add_edge(eid, group)
 
     condensed = nx.condensation(g)
     mapping = condensed.graph["mapping"]

@@ -135,6 +135,21 @@ thing and its twin quietly not.
 
 ### Fixed
 
+- **`spof` and `blast` said a quorum member reaches nothing; `simulate` said otherwise.** A
+  three-node consensus group with quorum 2 and an API on top: kill two nodes in `simulate`
+  and the group and the API stop. Ask `spof` about any one node and its reach was zero;
+  `blast` listed nothing. Structural reach only walked edges pointing *at* the failed
+  entity, and quorum is the one consequence that travels the other way — up a `MEMBER_OF`
+  from member to group. `propagate` already knew; the ranking did not, so every member of
+  every quorum group ranked as harmless.
+
+  Structural reach ignores redundancy on purpose (a service on two hosts is in range of
+  both), so a voting member now reaches its group whatever the quorum is. Groups that
+  declare no `quorum` are unchanged — losing a member only makes them thinner. The rule
+  lives in one place, `propagate.quorum_groups`, and `spof`, `blast` and `reach` all call it.
+- **`reach` sent a load balancer's death down to its pool.** It skipped the kind check that
+  `blast_radius` and `spof` make, so for membership it disagreed with both. It now asks the
+  same predicate.
 - **A name reached through a load balancer was called "floating" once it also needed a
   certificate.** The floating check counted hosting, placement and membership as somewhere to
   be, but not a way in. A DNS name has nowhere to run; it exists as the paths that reach it.
