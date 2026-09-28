@@ -211,7 +211,9 @@ def test_a_voter_that_carries_nothing_itself_is_still_ranked_for_its_quorum_tail
 
 def test_blast_json_keeps_impacted_as_what_goes_alone_and_lists_the_tail_apart(tmp_path):
     import json
+
     from typer.testing import CliRunner
+
     from orrery.cli import app
     out = CliRunner().invoke(app, ["blast", "host-a1", "--world", "fixtures/demo-world.yaml", "--json-out"])
     assert out.exit_code == 0, out.output
