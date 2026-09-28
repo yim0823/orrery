@@ -7,8 +7,9 @@ from __future__ import annotations
 
 import pathlib
 
-import yaml
 from pydantic import BaseModel, Field
+
+from orrery import yamlio
 
 
 class Injection(BaseModel):
@@ -58,4 +59,4 @@ class Scenario(BaseModel):
 
 
 def load_scenario(path: str | pathlib.Path) -> Scenario:
-    return Scenario(**yaml.safe_load(pathlib.Path(path).read_text("utf-8")))
+    return Scenario(**yamlio.load(pathlib.Path(path).read_text("utf-8")))

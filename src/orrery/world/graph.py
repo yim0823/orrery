@@ -11,6 +11,7 @@ import pathlib
 import networkx as nx
 import yaml
 
+from orrery import yamlio
 from orrery.connectors.base import Discovery
 from orrery.resolve import Resolver
 from orrery.schema import (
@@ -264,7 +265,7 @@ class World:
 
     @classmethod
     def load(cls, path: str | pathlib.Path) -> World:
-        data = yaml.safe_load(pathlib.Path(path).read_text("utf-8"))
+        data = yamlio.load(pathlib.Path(path).read_text("utf-8"))
         w = cls()
         for e in data["entities"]:
             w.add_entity(Entity(**e))

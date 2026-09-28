@@ -15,9 +15,9 @@ from __future__ import annotations
 import pathlib
 from typing import Any
 
-import yaml
 from pydantic import BaseModel, Field
 
+from orrery import yamlio
 from orrery.schema import Status
 
 
@@ -79,7 +79,7 @@ class Incident(BaseModel):
     @classmethod
     def load(cls, path: str | pathlib.Path) -> Incident:
         p = pathlib.Path(path)
-        data: dict[str, Any] = yaml.safe_load(p.read_text(encoding="utf-8"))
+        data: dict[str, Any] = yamlio.load(p.read_text(encoding="utf-8"))
         inc = cls(**data)
         # world paths are written relative to the record so a directory of incidents moves as one
         if not pathlib.Path(inc.world).is_absolute():
