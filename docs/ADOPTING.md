@@ -247,6 +247,40 @@ dies it takes the healthy survivor with it.
 counts surviving `RUNS_ON` targets, so a connector that emits real placement is worth
 more than an attribute someone typed in once and that has been drifting since.
 
+**Two paths that are both required.** `REACHED_VIA` and `RUNS_ON` mean *any one of these*:
+lose one and it is degraded, lose all and it is down. Some things need *each of* two
+things — a host on an internal network pair and a public one, where the internal pair
+carries its database traffic and the public pair carries its users. Writing all four
+switches as `REACHED_VIA` makes the public pair a spare for the internal one, and a real
+outage of either pair reads as "degraded". Give the second requirement its own group
+instead, with the switches (here `network_segment` entities) as members:
+
+```yaml
+entities:
+  - {id: path-public/web-01, kind: network_segment, name: "web-01 public path", attrs: {quorum: 1}}
+relations:
+  - {src: web-01, dst: tor-a1, kind: REACHED_VIA}          # internal pair: either will do
+  - {src: web-01, dst: tor-a2, kind: REACHED_VIA}
+  - {src: pub-b1, dst: path-public/web-01, kind: MEMBER_OF} # public pair: the path needs one
+  - {src: pub-b2, dst: path-public/web-01, kind: MEMBER_OF}
+  - {src: web-01, dst: path-public/web-01, kind: DEPENDS_ON, strength: soft}
+```
+
+One public switch dying leaves the path up and nothing changes; both dying takes the path
+down and degrades the host. Hard or soft on that last edge is the same question as any
+other dependency: does the host still do its job with internal traffic alone?
+
+**Observed traffic is evidence, not a dependency.** Flow logs look like the missing
+east-west edges, and it is tempting to load every observed call as a soft dependency.
+Don't. A soft edge still carries degradation, and with a few thousand of them almost any
+single failure degrades most of the estate: one member of a log pool dying degrades every
+service that ever shipped it a line. Keep observed calls
+beside the map, show them next to an answer as "these were talking to what died", and let
+only dependencies someone can defend drive propagation. Filter before you even show them:
+metrics and log shipping, replication and cluster gossip, ephemeral ports (flow exporters
+often record direction backwards), and machines that host more than one service, where you
+cannot tell whose traffic it was.
+
 ---
 
 ## Step 5 — prove it before anyone relies on it
@@ -295,6 +329,24 @@ somebody checked, so it prints how many went unverified and says it is an upper 
 Recall counts a prediction of "degraded" for something that died as caught, which is why
 `on breaks` is the number to watch. And if every incident replays against one snapshot
 written after the fact, you are measuring hindsight.
+
+Three more rules once the corpus is real, each learned by publishing a number that turned
+out to be flattering:
+
+**Score what the record names.** If a postmortem names the service that broke, a hit is
+predicting *that* service. An incident that says only "users affected" cannot tell a right
+answer from a lucky one — count it, but keep it out of the headline. A second line that
+divides by "incidents that named something the map knows" looks better and is biased: the
+records a map cannot resolve are exactly the ones where it would have missed.
+
+**Take out what you fixed after seeing it.** When a miss in the corpus leads you to change
+a rule, that incident now scores as a hit because you tuned to it. List those incidents and
+leave them out of both the numerator and the denominator. The same goes for the incident a
+rule was derived from. The only held-out sample is incidents newer than the map.
+
+**Keep the propagation you are testing.** If you add a layer you cannot validate (observed
+calls, say), score without it. Otherwise the new layer turns misses into hits by reaching
+everything, and the score rises for a reason that has nothing to do with being right.
 
 **This is also your only credible artifact.** "We built a dependency graph" persuades
 nobody who has watched a CMDB rot. "We replayed our last thirty incidents and the map

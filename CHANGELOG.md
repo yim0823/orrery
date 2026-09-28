@@ -133,28 +133,60 @@ thing and its twin quietly not.
   files with no suffix and HTML. A name removed in a later commit is still in the history that goes out, and
   a name in a file name or a PNG is published just the same.
 
+### Changed
+
+- **Maps load several times faster.** Every YAML read — `World.load`, the static connector,
+  incidents, scenarios — went through PyYAML's pure-Python `safe_load`. On a synthetic map of
+  twenty-five thousand entities and fifty thousand relations that was about ten seconds
+  before `simulate` could answer anything. They now go through one reader,
+  `orrery.yamlio.load`, which uses libyaml's `CSafeLoader` when PyYAML has it (about two
+  seconds on the same file) and the pure-Python safe loader when it does not. Same safe
+  subset; the C loader is stricter about a few escapes, and on a parse error the text is read
+  again by the pure-Python loader so the message still points at the line. A test checks
+  every fixture parses identically.
+
+### Documentation
+
+- **ADOPTING: two modelling recipes and three scoring rules.**
+  - *Two paths that are both required.* A host that needs both its internal and its public
+    network cannot be written as `REACHED_VIA` to all four switches. That makes one network
+    a spare for the other. The recipe is a quorum-1 group per host for the second path.
+  - *Observed traffic is evidence, not a dependency.* Why flow logs belong beside the map,
+    not in propagation, and what to filter before showing them.
+  - *Score what the record names*, *take out what you fixed after seeing it*, and *keep the
+    propagation you are testing* — three ways a backtest number flattered the map before
+    they were written down.
+
 ### Fixed
 
-- **`spof` and `blast` said a quorum member reaches nothing; `simulate` said otherwise.** A
-  three-node consensus group with quorum 2 and an API on top: kill two nodes in `simulate`
-  and the group and the API stop. Ask `spof` about any one node and its reach was zero;
-  `blast` listed nothing. Structural reach only walked edges pointing *at* the failed
-  entity, and quorum is the one consequence that travels the other way — up a `MEMBER_OF`
-  from member to group. `propagate` already knew; the ranking did not, so every member of
-  every quorum group ranked as harmless.
+- **`spof` and `blast` did not follow a quorum member to its group; `simulate` did.** A
+  three-node consensus group with quorum 2 and an API on top: kill two nodes in `simulate` and
+  the group and the API stop. Structural reach only walked edges pointing *at* the failed
+  entity, and quorum is the one consequence that travels the other way — up a `MEMBER_OF` from
+  member to group. So a voter was ranked by what runs on it, never by the group it votes in,
+  and `blast site-a` on the demo could leave out a member `simulate site-a` kills.
 
-  Structural reach ignores redundancy on purpose (a service on two hosts is in range of
-  both), so a voting member now reaches its group whatever the quorum is. Groups that
-  declare no `quorum` are unchanged — losing a member only makes them thinner. The rule
-  lives in one place, `propagate.quorum_groups`, and `spof`, `blast` and `reach` all call it.
+  The rule lives in one place, `propagate.quorum_groups`, and `blast`, `spof` and `reach` all
+  call it. What it adds is **reported apart**, because "goes with it" and "goes if one more
+  voter goes" are different pages. `blast` prints the tail as its own line —
+  `+3 through etcd (quorum 2 of 3, this takes 1): etcd, node-a2, node-b1` on the demo — and
+  `--json-out` gives it as `through_quorum`, leaving `impacted` what it was. `spof` ranks by
+  what goes alone, as before, and shows the tail as a `+N` column; without the split, the
+  voters of a healthy three-way group outranked the hypervisor carrying two "independent"
+  nodes, which is the finding the list exists for. The demo's ranking and numbers are
+  unchanged; the `+N` column and the `through` line are new. `reach()` returns the whole set.
+- **`check` only validated quorum on clusters.** A `quorum` on any other kind — a replica set
+  written as a service, a path that needs one of two switches — was never checked, so a quorum
+  larger than its members, or one that is not a number, stayed silent until `simulate` failed.
+  The checks now apply to whatever carries the attribute.
 - **`reach` sent a load balancer's death down to its pool.** It skipped the kind check that
   `blast_radius` and `spof` make, so for membership it disagreed with both. It now asks the
   same predicate.
 - **A name reached through a load balancer was called "floating" once it also needed a
   certificate.** The floating check counted hosting, placement and membership as somewhere to
   be, but not a way in. A DNS name has nowhere to run; it exists as the paths that reach it.
-  Adding one dependency to such a name turned a correctly wired record into a finding, and on
-  a real estate that was hundreds of findings about nothing. `REACHED_VIA` now counts.
+  Adding one dependency to such a name turned a correctly wired record into a finding — one
+  for every such name. `REACHED_VIA` now counts.
 - **The README check read whatever snapshot was lying around.** The commands it compares read
   the world in the working directory, so run from a laptop they read the last `orrery ingest`
   left there. A renamed rack printed its old name for a day while the check reported that the
