@@ -664,7 +664,7 @@ over the SCC condensation rather than one traversal per entity; §14 has the num
 
 `src/orrery/cli.py`
 
-Eight commands: `ingest`, `blast`, `simulate`, `check`, `spof`, `resolve`, `diff`,
+Eight commands answer questions: `ingest`, `blast`, `simulate`, `check`, `spof`, `resolve`, `diff`,
 `backtest`. **Every one of them takes `--json-out`**, because the interesting uses are not
 a person typing. Posting a blast radius onto a change ticket, or failing a pipeline on a
 miss count, means something has to parse the output.
@@ -689,6 +689,26 @@ output breaks whatever someone built on it, at a moment nobody is watching.
 The JSON is richer than the human output rather than a reformatting of it. `blast --json-out`
 includes the full path to each impacted entity, which is what makes the answer arguable
 instead of oracular.
+
+### `map` — the same answers, drawn
+
+`src/orrery/web/`
+
+A ninth command, `map`, is the one without `--json-out`: its output is a page. It serves
+`web/static/` from a standard-library `ThreadingHTTPServer` bound to loopback, with four
+read-only routes — `/api/world`, `/api/blast`, `/api/simulate`, and the page itself — or,
+with `--export`, writes the page as one file with every answer embedded.
+
+The page computes no consequence. `blast --json-out`, `simulate --json-out` and the page
+all build their answers in `orrery.web.api`, so they cannot drift. What the page adds is
+*order of arrival*: a breadth-first walk from the trigger through the edges consequence
+travels on, restricted to what the engine said was affected, which is what lets it replay
+a result as a wave and answer "why is this down" with a chain.
+
+An export is exact rather than sampled. A soft edge turns hard at its declared tolerance and
+at no other moment, so between two tolerances the answer is constant: one simulation per
+entity, per event, per interval covers every position of the clock. That is also why
+exports stop at 3,000 entities.
 
 ---
 
@@ -889,7 +909,8 @@ happened to land on that host, so there was nothing to walk.
 | scoring | `orrery.scoring` | Four-axis rubric, no-action gate |
 | backtest | `orrery.backtest` | Replay past incidents and grade the engine |
 | harness | `orrery.harness` | Agent tool-surface contract and the audit log; real tool adapters live outside this repo |
-| cli | `orrery.cli` | Eight commands, each with `--json-out` and a schema version |
+| web | `orrery.web` | The map page: a read-only local server, or one exported file |
+| cli | `orrery.cli` | Eight commands with `--json-out` and a schema version, and `map` |
 
 ---
 

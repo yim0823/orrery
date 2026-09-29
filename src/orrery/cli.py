@@ -5,6 +5,7 @@ import functools
 import json
 import pathlib
 import sys
+from typing import Annotated
 
 import typer
 import yaml
@@ -14,6 +15,7 @@ from orrery.connectors import StaticYamlConnector
 from orrery.resolve import Resolver
 from orrery.sim import Event, propagate
 from orrery.sim.propagate import INJECTABLE_EVENTS
+from orrery.web.api import blast_payload, simulate_payload
 from orrery.world import (
     EntityKind,
     World,
@@ -135,22 +137,7 @@ def blast(
     entity_id = _resolve(w, entity_id)
     br = blast_radius(w, entity_id, max_hops)
     if json_out:
-        _emit(
-            {
-                "root": entity_id,
-                "root_kind": w.entity(entity_id).kind.value,
-                "total": len(w) - 1,
-                "impacted": [
-                    {
-                        "id": eid,
-                        "kind": w.entity(eid).kind.value,
-                        "hop": hop,
-                        "path": br.paths.get(eid, []),
-                    }
-                    for eid, hop in sorted(br.impacted.items(), key=lambda kv: (kv[1], kv[0]))
-                ],
-            }
-        )
+        _emit(blast_payload(w, entity_id, max_hops))
         return
     typer.echo(f"root: {entity_id} ({w.entity(entity_id).kind})")
     for hop, ids in br.by_hop().items():
@@ -183,25 +170,10 @@ def simulate(
             f"An unrecognised event propagates nothing, which looks identical to "
             f"nothing being affected."
         )
-    effects = propagate(w, Event(entity_id, event), elapsed_s=elapsed_s)
     if json_out:
-        _emit(
-            {
-                "trigger": entity_id,
-                "event": event,
-                "elapsed_s": elapsed_s,
-                "effects": [
-                    {
-                        "id": e.entity_id,
-                        "kind": w.entity(e.entity_id).kind.value,
-                        "status": e.status.value if e.status else None,
-                        "why": e.note,
-                    }
-                    for e in effects
-                ],
-            }
-        )
+        _emit(simulate_payload(w, entity_id, event, elapsed_s))
         return
+    effects = propagate(w, Event(entity_id, event), elapsed_s=elapsed_s)
     for e in effects:
         st = e.status.value if e.status else "-"
         typer.echo(f"  {e.entity_id:<24} -> {st:<9} {e.note}")
@@ -308,6 +280,57 @@ def spof(
         else ""
     )
     typer.echo(format_risks(risks, len(w), note))
+
+
+@app.command(name="map")
+@friendly
+def map_cmd(
+    world: pathlib.Path | None = None,
+    host: str = "127.0.0.1",
+    port: int = 7777,
+    open_browser: Annotated[
+        bool, typer.Option("--open/--no-open", help="Open a browser tab.")
+    ] = True,
+    export: Annotated[
+        pathlib.Path | None,
+        typer.Option(help="Write one self-contained HTML file instead of serving."),
+    ] = None,
+):
+    """Draw the map in a browser: the estate as an orrery, failures as shockwaves.
+
+    Serves a read-only page on loopback that asks the engine live — the same answers
+    `blast` and `simulate` give. `--export map.html` writes the page with every answer
+    precomputed, for someone with a browser and no Python.
+    """
+    from orrery.web import export_html
+    from orrery.web.server import make_server
+
+    w = _load(world)
+    if export is not None:
+        size = export_html(w, export)
+        typer.echo(f"wrote {export} ({size / 1024:,.0f} KiB) — {len(w)} entities, no server")
+        return
+    try:
+        server = make_server(w, host, port)
+    except OSError as exc:
+        raise typer.BadParameter(f"cannot listen on {host}:{port}: {exc.strerror}") from exc
+    bound_host, bound_port = server.server_address[:2]
+    url = f"http://{'localhost' if bound_host in ('127.0.0.1', '::1') else bound_host}:{bound_port}/"
+    typer.echo(f"orrery map — {len(w)} entities, {len(w.relations())} relations")
+    typer.echo(f"  {url}")
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        typer.echo("  ⚠ listening beyond this machine: anyone who can reach it can read the map")
+    typer.echo("  ctrl-c to stop")
+    if open_browser:
+        import webbrowser
+
+        webbrowser.open(url)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        typer.echo("")
+    finally:
+        server.server_close()
 
 
 @app.command()

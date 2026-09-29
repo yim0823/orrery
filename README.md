@@ -72,6 +72,7 @@ uv sync
 uv run orrery ingest fixtures/demo-world.yaml
 uv run orrery blast site-a
 uv run orrery simulate db-stock
+uv run orrery map            # the same answers, drawn — opens a browser tab
 ```
 
 **Names.** The distribution is `orrery-engine`; the import and the command are `orrery`.
@@ -95,6 +96,29 @@ organization.
 | `orrery spof` | What is most dangerous? Entities ranked by what goes with them |
 | `orrery diff <a> <b>` | What changed between two snapshots — structure, and which findings appeared |
 | `orrery backtest <dir>` | Replay past incidents and score the engine against them |
+| `orrery map` | Draw the map in a browser; `--export map.html` for one file with no server |
+
+### Seeing it
+
+`orrery map` serves a read-only page on `localhost:7777` and opens it. The estate is drawn
+as an orrery: sites at the core, then racks, hosts, virtual machines, nodes, data, and
+services at the rim. Everything sits inside the wedge of whatever it stands on, so two
+replicas on one machine are two bodies in one wedge — the trap below is something you can
+see before you read about it.
+
+Pick an entity (`/` searches) and press **S**. The engine runs `simulate` and the page
+replays the answer as a wave, hop by hop, down the edges it actually travelled; click
+anything it reached to get the chain back to the trigger. **B** does the same for `blast`,
+so the two answers can be put side by side. Where a soft dependency declares a tolerance,
+a clock appears, and dragging past it turns the edge hard in front of you.
+
+The page computes no consequence of its own. Every answer comes from the same functions
+behind `--json-out`, so the picture cannot disagree with the command.
+`orrery map --export map.html` writes one self-contained file with every answer
+precomputed — no server, no network, nothing fetched — for a map you want to hand to
+someone. Exports stop at 3,000 entities; beyond that, serve it. The server binds to
+loopback unless `--host` says otherwise, because a map of an estate is a document worth
+protecting.
 
 ## Two questions you have on day one
 

@@ -15,6 +15,21 @@ thing and its twin quietly not.
 
 ### Added
 
+- **`orrery map`: the map, drawn.** A read-only page, served on loopback from the standard
+  library, that draws the estate as an orrery — foundations at the core, the call layer at
+  the rim, each thing inside the wedge of what it stands on. Select anything and simulate
+  it: the engine's answer is replayed hop by hop along the edges it travelled, with the
+  chain back to the trigger for anything it reached. `blast` gets the same treatment, map
+  health and the `spof` ranking sit beside it, and a declared tolerance becomes a clock
+  you can drag past.
+
+  No new dependency and no build step: three static files inside the package.
+  `--export map.html` writes one self-contained file with every answer precomputed —
+  exactly, since answers only change at a declared tolerance — capped at 3,000 entities.
+  `blast --json-out` and `simulate --json-out` now build their payloads in
+  `orrery.web.api`, the same place the page's come from, so the two cannot drift; the
+  output is unchanged.
+
 - **A check that fires on most of what it looks at is one line, not a list.** Found by
   pointing `check` at a real map of a production estate: `no recorded placement` fired on
   more than half of its virtual machines, because nobody records which physical machine a

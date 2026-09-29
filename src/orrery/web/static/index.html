@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#05070d">
+<title>orrery — infrastructure map</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='5' fill='%23f3c677'/%3E%3Cellipse cx='16' cy='16' rx='14' ry='6' fill='none' stroke='%238fa4ff' stroke-width='1.6' transform='rotate(-24 16 16)'/%3E%3Ccircle cx='28' cy='11' r='2.4' fill='%235ce2c9'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="app" class="booting">
+  <canvas id="stars" aria-hidden="true"></canvas>
+  <canvas id="map" tabindex="0" aria-label="Infrastructure map. Use the search (/) to find an entity."></canvas>
+
+  <header class="topbar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 40 40" aria-hidden="true">
+        <circle cx="20" cy="20" r="5.2" class="bm-sun"/>
+        <ellipse cx="20" cy="20" rx="17" ry="7.5" class="bm-orbit" transform="rotate(-24 20 20)"/>
+        <ellipse cx="20" cy="20" rx="11" ry="16" class="bm-orbit2" transform="rotate(18 20 20)"/>
+        <g class="bm-spin"><circle cx="35.4" cy="13.4" r="2.6" class="bm-p1"/></g>
+        <g class="bm-spin2"><circle cx="15.6" cy="4.8" r="1.9" class="bm-p2"/></g>
+      </svg>
+      <div class="brand-text">
+        <span class="brand-name">orrery</span>
+        <span class="brand-tag">infrastructure world engine</span>
+      </div>
+    </div>
+
+    <div class="stats" id="stats" aria-live="polite"></div>
+
+    <div class="top-actions">
+      <button class="search-trigger" id="searchBtn" type="button" aria-label="Search entities">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="6"/><path d="M14 14l4 4"/></svg>
+        <span>Find an entity</span>
+        <kbd>/</kbd>
+      </button>
+      <span class="mode-badge" id="modeBadge"></span>
+    </div>
+  </header>
+
+  <button class="rail-toggle" id="railToggle" type="button" aria-controls="rail" aria-expanded="false">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h9"/></svg>
+    <span>Map</span>
+  </button>
+
+  <aside class="rail" id="rail" aria-label="Map overview">
+    <section class="panel" id="legendPanel">
+      <h3 class="panel-title"><span>Layers</span><small>click to hide</small></h3>
+      <div id="legend"></div>
+    </section>
+    <section class="panel" id="gravityPanel">
+      <h3 class="panel-title"><span>Gravity</span><small>what goes with it</small></h3>
+      <ol class="gravity" id="gravity"></ol>
+      <p class="panel-note" id="gravityNote"></p>
+    </section>
+    <section class="panel" id="healthPanel">
+      <h3 class="panel-title"><span>Map health</span><small id="healthCount"></small></h3>
+      <div id="health"></div>
+    </section>
+  </aside>
+
+  <aside class="inspector" id="inspector" aria-label="Entity details" hidden></aside>
+
+  <div class="hud" id="hud" hidden></div>
+
+  <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+
+  <div class="zoom" role="group" aria-label="Zoom">
+    <button type="button" data-zoom="in" aria-label="Zoom in">+</button>
+    <button type="button" data-zoom="out" aria-label="Zoom out">&minus;</button>
+    <button type="button" data-zoom="fit" aria-label="Fit the map">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/></svg>
+    </button>
+  </div>
+
+  <div class="keys" aria-hidden="true">
+    <span><kbd>/</kbd> find</span>
+    <span><kbd>S</kbd> outage</span>
+    <span><kbd>D</kbd> degrade</span>
+    <span><kbd>B</kbd> blast</span>
+    <span><kbd>Esc</kbd> clear</span>
+  </div>
+
+  <div class="palette-backdrop" id="palette" hidden>
+    <div class="palette" role="dialog" aria-modal="true" aria-label="Find an entity">
+      <div class="palette-input">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="6"/><path d="M14 14l4 4"/></svg>
+        <input id="paletteInput" type="text" placeholder="id, name or kind…" autocomplete="off" spellcheck="false" aria-controls="paletteList">
+        <kbd>Esc</kbd>
+      </div>
+      <ul class="palette-list" id="paletteList" role="listbox"></ul>
+    </div>
+  </div>
+
+  <div class="splash" id="splash">
+    <div class="splash-inner">
+      <svg class="splash-mark" viewBox="0 0 40 40" aria-hidden="true">
+        <circle cx="20" cy="20" r="5.2" class="bm-sun"/>
+        <ellipse cx="20" cy="20" rx="17" ry="7.5" class="bm-orbit" transform="rotate(-24 20 20)"/>
+        <g class="bm-spin"><circle cx="35.4" cy="13.4" r="2.6" class="bm-p1"/></g>
+      </svg>
+      <p id="splashText">Charting the estate…</p>
+    </div>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

@@ -21,6 +21,9 @@ uv run orrery spof --limit 5
 uv run orrery resolve fixtures/demo-world.yaml
 uv run orrery backtest fixtures/incidents
 
+echo "== the map exports to one file =="
+uv run orrery map --export "${TMPDIR:-/tmp}/orrery-smoke-map.html"
+
 echo "== machine-readable output parses =="
 uv run orrery blast site-a --json-out | uv run python -c "import json,sys; d=json.load(sys.stdin); assert d['schema']==1; print('json ok:', len(d['impacted']), 'impacted')"
 
