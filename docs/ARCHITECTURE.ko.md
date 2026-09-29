@@ -379,6 +379,7 @@ class BehaviorModel(Protocol):
 | scoring | `orrery.scoring` | 4축 루브릭, 무행동 게이트 |
 | backtest | `orrery.backtest` | 과거 장애 재생·채점 |
 | harness | `orrery.harness` | 에이전트 도구 표면 계약 (인터페이스만, 구현 미완) |
+| web | `orrery.web` | 지도 페이지: 읽기 전용 로컬 서버, 또는 내보낸 파일 하나 |
 
 ---
 
