@@ -161,7 +161,7 @@ class Relation(BaseModel):
 
 `src/orrery/world/query.py`
 
-**X가 죽으면, X를 가리키는 화살표를 가진 것들이 영향을 받습니다.** 들어오는 간선을 따라가는 너비 우선 탐색입니다.
+**X가 죽으면, X를 가리키는 화살표를 가진 것들이 영향을 받습니다.** 들어오는 간선을 따라가는 너비 우선 탐색입니다. 여기에 반대 방향 하나를 더합니다 — X가 투표 멤버인, `quorum`을 선언한 그룹입니다. 그 그룹이 가져가는 것은 다른 멤버까지 충분히 잃어야 영향을 받으므로 따로 보고합니다(`BlastRadius.through_quorum`, `spof`의 `+N` 칸).
 
 ```python
 _IMPACT_EDGES = (RUNS_ON, HOSTED_IN, MEMBER_OF, DEPENDS_ON)

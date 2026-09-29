@@ -112,6 +112,25 @@ _COUNTED_EDGES = {
 _DOWNWARD_MEMBERSHIP = frozenset({EntityKind.CLUSTER})
 
 
+def quorum_groups(world: World, member_id: str) -> list[str]:
+    """The groups this entity is a voting member of — the upward reading of `MEMBER_OF`.
+
+    A group that declares `quorum` stops when too few of its members are left, so each
+    member is one of the things that can take it down. `propagate` already acts on that
+    (`_membership_effects`); structural reach has to say the same thing, or `spof` ranks a
+    three-node consensus cluster's members as reaching nothing while `simulate` shows the
+    cluster and everything on it stopping when two of them go.
+
+    Structural reach ignores redundancy on purpose — a service on two hosts is in range
+    of both — so a quorum member reaches its group the same way, whatever the quorum is.
+    Groups without `quorum` are left out: losing a member only makes them thinner.
+    """
+    return [
+        g for g in world.out_edges(member_id, RelationKind.MEMBER_OF)
+        if (world.entity(g).attrs or {}).get("quorum")
+    ]
+
+
 def consequence_crosses(edge: RelationKind, dst_kind: EntityKind) -> bool:
     """Does the death of the thing at `dst` reach whatever points at it over `edge`?
 

@@ -229,7 +229,9 @@ rather than each keeping its own.
 `src/orrery/world/query.py`
 
 **If X goes down, the things with an arrow pointing at X are in range.** A breadth-first
-walk over incoming edges.
+walk over incoming edges — plus, read the other way, any group X votes in that declares
+`quorum`. What such a group takes with it is in range only if it also loses enough other
+voters, so it is reported apart (`BlastRadius.through_quorum`, the `+N` column in `spof`).
 
 ```python
 def blast_radius(world, root, max_hops=None) -> BlastRadius

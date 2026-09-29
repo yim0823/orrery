@@ -20,9 +20,12 @@ root: host-a1 (host)
   hop 2: svc-web (service), svc-inventory (service)
   hop 3: svc-checkout (service)
 impacted: 5 / 25
+  +3 through etcd (quorum 2 of 3, this takes 1): etcd, node-a2, node-b1
 ```
 
 서버 한 대를 골랐더니 세 단계 건너 결제 서비스까지 나옵니다. `host-a1`과 `svc-checkout`은 직접 연결된 적이 없습니다. 그 사이에 노드, 데이터베이스, 재고 서비스가 있고, 사람이 머릿속으로 세 단계를 따라가기는 어렵습니다.
+
+마지막 줄은 일부러 따로 둡니다. `node-a1`은 셋 중 둘이 있어야 서는 `etcd`의 투표 멤버라, 이 서버가 죽으면 한 표가 빠집니다. `etcd`와 나머지 멤버는 한 표가 더 빠질 때만 같이 멈춥니다 — 그 멤버들은 이 서버의 피해자가 아니라 이중화 자체입니다.
 
 ---
 
@@ -161,11 +164,11 @@ $ orrery spof --limit 5
 
 single points of failure, by what goes with them (26 entities)
 
-    1. rack-a1       15 (60.0%)  rack  a1
-    2. k8s-main       9 (36.0%)  cluster  main
-    3. etcd           6 (24.0%)  cluster  etcd (quorum 2 of 3)
-    4. host-a3        6 (24.0%)  host  a3
-    5. host-a1        5 (20.0%)  host  a1
+    1. rack-a1       15 (60.0%)    +2  rack  a1
+    2. k8s-main       9 (36.0%)    +1  cluster  main
+    3. etcd           6 (24.0%)        cluster  etcd (quorum 2 of 3)
+    4. host-a3        6 (24.0%)        host  a3
+    5. host-a1        5 (20.0%)    +3  host  a1
 
 2 site(s) left out — everything in a datacentre goes with it; --include-sites to rank them
 ```
@@ -174,6 +177,7 @@ single points of failure, by what goes with them (26 entities)
 이중화를 드러내는 것이 이 목록의 목적이기 때문입니다. 4위의 `host-a3`가 그 예입니다 — 쿠버네티스가
 서로 독립이라고 믿는 노드 두 개를 물리 서버 한 대가 받치고 있습니다.
 [아래에서 설명합니다](#사람들이-빠뜨리는-층-클러스터가-무엇-위에-서-있나).
+`+N`은 이 개체가 투표 멤버 하나를 빼앗는 과반 그룹이 과반까지 잃을 때만 같이 가는 것입니다. 따로 세야 건강한 세 멤버 그룹의 멤버들이 `host-a3`보다 위로 올라가지 않습니다.
 
 IDC는 따로 묻지 않으면 빠집니다(`--include-sites`). 실제 규모의 지도에서는 안 빼면 목록 맨 위가
 IDC 전부로 채워집니다. 맞는 말이지만 이번 주에 누가 손댈 수 있는 게 아닙니다. `check` 가 IDC 공유를

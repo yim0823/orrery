@@ -34,11 +34,16 @@ root: host-a1 (host)
   hop 2: svc-web (service), svc-inventory (service)
   hop 3: svc-checkout (service)
 impacted: 5 / 25
+  +3 through etcd (quorum 2 of 3, this takes 1): etcd, node-a2, node-b1
 ```
 
 One host, and three hops later your checkout service is in the list. `host-a1` and
 `svc-checkout` are never directly connected — a node, a database and an inventory
 service sit in between. Tracing that by hand, at 3am, is where outages get longer.
+
+The last line is kept apart on purpose. `node-a1` votes in `etcd`, which needs two of its
+three members, so this host takes one vote with it. `etcd` and its other members go only if
+a second vote goes too — those peers are the redundancy, not this host's victims.
 
 **But "in range" is not "down".** Whether something actually dies depends on
 replicas and failover, so there is a second command:
@@ -136,11 +141,11 @@ $ orrery spof --limit 5
 
 single points of failure, by what goes with them (26 entities)
 
-    1. rack-a1       15 (60.0%)  rack  a1
-    2. k8s-main       9 (36.0%)  cluster  main
-    3. etcd           6 (24.0%)  cluster  etcd (quorum 2 of 3)
-    4. host-a3        6 (24.0%)  host  a3
-    5. host-a1        5 (20.0%)  host  a1
+    1. rack-a1       15 (60.0%)    +2  rack  a1
+    2. k8s-main       9 (36.0%)    +1  cluster  main
+    3. etcd           6 (24.0%)        cluster  etcd (quorum 2 of 3)
+    4. host-a3        6 (24.0%)        host  a3
+    5. host-a1        5 (20.0%)    +3  host  a1
 
 2 site(s) left out — everything in a datacentre goes with it; --include-sites to rank them
 ```
@@ -149,6 +154,9 @@ Structural reach, and deliberately blind to any declared redundancy — redundan
 recorded but not real is exactly what this list exists to surface. `host-a3` in fourth
 place is one physical server carrying two Kubernetes nodes that the cluster believes are
 independent; see [the layer people forget](#the-layer-people-forget-what-the-cluster-is-standing-on).
+`+N` is what goes only if a quorum group this entity takes a voter from also loses its
+quorum. It is counted apart so that voters in a healthy three-way group do not outrank
+`host-a3`.
 
 Sites are left out unless you ask (`--include-sites`). On a real estate the top of
 the list is otherwise every datacentre in order of size — true, and nothing anyone

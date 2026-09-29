@@ -13,6 +13,7 @@ import yaml
 from orrery.backtest import Incident, Outcome, format_report, run
 from orrery.connectors import StaticYamlConnector
 from orrery.resolve import Resolver
+from orrery.schema import RelationKind
 from orrery.sim import Event, propagate
 from orrery.sim.propagate import INJECTABLE_EVENTS
 from orrery.web.api import blast_payload, simulate_payload
@@ -26,6 +27,7 @@ from orrery.world import (
     format_risks,
     single_points_of_failure,
 )
+from orrery.world.query import BlastRadius
 
 app = typer.Typer(
     help="orrery: every server is on the map, and when you act, the consequence is computed."
@@ -140,9 +142,21 @@ def blast(
         _emit(blast_payload(w, entity_id, max_hops))
         return
     typer.echo(f"root: {entity_id} ({w.entity(entity_id).kind})")
-    for hop, ids in br.by_hop().items():
+    direct = {i: h for i, h in br.impacted.items() if i not in br.through_quorum}
+    for hop, ids in BlastRadius(entity_id, direct).by_hop().items():
         typer.echo(f"  hop {hop}: " + ", ".join(f"{i} ({w.entity(i).kind})" for i in ids))
-    typer.echo(f"impacted: {len(br.impacted)} / {len(w) - 1}")
+    typer.echo(f"impacted: {len(direct)} / {len(w) - 1}")
+    groups: dict[str, list[str]] = {}
+    for i, g in br.through_quorum.items():
+        groups.setdefault(g, []).append(i)
+    taken_by_root = {br.root, *direct}
+    for g, ids in groups.items():
+        voters = set(w.in_edges(g, RelationKind.MEMBER_OF))
+        rest = sorted(i for i in ids if i != g)
+        typer.echo(
+            f"  +{len(ids)} through {g} (quorum {w.entity(g).attrs.get('quorum')} of {len(voters)}, "
+            f"this takes {len(voters & taken_by_root)}): {', '.join([g, *rest])}"
+        )
 
 
 @app.command()

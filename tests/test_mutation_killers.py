@@ -264,7 +264,9 @@ def test_reach_ranking_agrees_with_walking_the_graph():
 
     w = _demo()
     for risk in single_points_of_failure(w, limit=50):
-        assert risk.reach == len(reach(w, risk.entity_id)), risk.entity_id
+        # `reach` is the whole set; the ranking splits it into what goes alone and what goes
+        # through a quorum group — the two parts together must still be the walk's answer
+        assert risk.reach + risk.through_quorum == len(reach(w, risk.entity_id)), risk.entity_id
 
 
 # ---- runner, where the boundary was never crossed ----

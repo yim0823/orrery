@@ -9,8 +9,7 @@ from __future__ import annotations
 import pathlib
 from typing import Any
 
-import yaml
-
+from orrery import yamlio
 from orrery.schema import Entity, Provenance, Relation
 
 from .base import Discovery
@@ -23,7 +22,7 @@ class StaticYamlConnector:
         self.path = pathlib.Path(path)
 
     def discover(self) -> Discovery:
-        raw = yaml.safe_load(self.path.read_text(encoding="utf-8"))
+        raw = yamlio.load(self.path.read_text(encoding="utf-8"))
         if raw is None:
             return Discovery()
         if not isinstance(raw, dict):

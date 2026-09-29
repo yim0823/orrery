@@ -308,7 +308,9 @@ def audit(world: World) -> MapAudit:
                         )
                     )
 
-        if e.kind is EntityKind.CLUSTER and e.attrs.get("quorum"):
+        # Any kind can carry a quorum — a cluster, a replica set written as a service, a path
+        # that needs one of two switches. The checks are the same for all of them.
+        if e.attrs.get("quorum"):
             members = len(world.in_edges(e.id, RelationKind.MEMBER_OF))
             try:
                 quorum = int(e.attrs["quorum"])
@@ -333,9 +335,17 @@ def audit(world: World) -> MapAudit:
     for e in world.entities():
         if e.kind in _ROOTS:
             continue
+        # A way in is a place too. A DNS name has nowhere to run and needs none: it exists as the
+        # paths that reach it. Leaving REACHED_VIA out called every name that also leans on a
+        # certificate "floating" — a finding for every such record, though each is wired correctly.
         if not any(
             world.out_edges(e.id, k)
-            for k in (RelationKind.HOSTED_IN, RelationKind.RUNS_ON, RelationKind.MEMBER_OF)
+            for k in (
+                RelationKind.HOSTED_IN,
+                RelationKind.RUNS_ON,
+                RelationKind.MEMBER_OF,
+                RelationKind.REACHED_VIA,
+            )
         ):
             depends_only = world.out_edges(e.id, RelationKind.DEPENDS_ON)
             if depends_only:
@@ -480,8 +490,12 @@ class Risk:
     entity_id: str
     kind: str
     name: str
-    reach: int
+    reach: int  # what goes with it on its own
     share: float
+    # What goes only if a quorum group it takes a voter from also loses its quorum. Kept apart
+    # from `reach` so a voter in a healthy three-way group does not outrank the hypervisor
+    # carrying two "independent" nodes — the peers are the redundancy, not its victims.
+    through_quorum: int = 0
 
     def to_dict(self) -> dict:
         return {
@@ -490,10 +504,11 @@ class Risk:
             "name": self.name,
             "reach": self.reach,
             "share": round(self.share, 4),
+            "through_quorum": self.through_quorum,
         }
 
 
-def _reach_sizes(world: World) -> dict[str, int]:
+def _reach_sizes(world: World, upward: bool = True) -> dict[str, int]:
     """How many entities each one takes with it, for every entity at once.
 
     The obvious implementation — a traversal per entity — costs the sum of all reaches,
@@ -507,7 +522,7 @@ def _reach_sizes(world: World) -> dict[str, int]:
     string at a time. Same answer, and the cost stops being the thing that decides
     whether anyone runs the command.
     """
-    from orrery.sim.propagate import _DEPENDENT_EDGES, consequence_crosses
+    from orrery.sim.propagate import _DEPENDENT_EDGES, consequence_crosses, quorum_groups
 
     ids = [e.id for e in world.entities()]
     index = {eid: i for i, eid in enumerate(ids)}
@@ -524,6 +539,9 @@ def _reach_sizes(world: World) -> dict[str, int]:
         )
         for dep in world.dependents(eid, kinds):
             g.add_edge(eid, dep)
+        # And the one consequence that travels up: a voting member can take its group down
+        for group in quorum_groups(world, eid) if upward else ():
+            g.add_edge(eid, group)
 
     condensed = nx.condensation(g)
     mapping = condensed.graph["mapping"]
@@ -586,11 +604,12 @@ def single_points_of_failure(
     rather than a smaller constant.
     """
     total = max(1, len(world) - 1)
-    sizes = _reach_sizes(world)
+    sizes = _reach_sizes(world, upward=False)
+    full = _reach_sizes(world)
     out = [
-        Risk(e.id, e.kind.value, e.name, sizes[e.id], sizes[e.id] / total)
+        Risk(e.id, e.kind.value, e.name, sizes[e.id], sizes[e.id] / total, full[e.id] - sizes[e.id])
         for e in world.entities()
-        if sizes.get(e.id)
+        if full.get(e.id)
         and not (kinds and e.kind not in kinds)
         and e.kind not in exclude_kinds
     ]
@@ -613,7 +632,7 @@ def format_risks(risks: list[Risk], total_entities: int, left_out: str = "") -> 
         name = f"  {r.name}" if r.name and r.name != r.entity_id else ""
         lines.append(
             f"  {i:>3}. {r.entity_id:<{width}}  {r.reach:>6,} ({r.share * 100:4.1f}%)  "
-            f"{r.kind}{name}"
+            f"{('+' + str(r.through_quorum)) if r.through_quorum else '':>4}  {r.kind}{name}"
         )
     if left_out:
         lines += ["", left_out]

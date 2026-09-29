@@ -443,7 +443,9 @@ def test_the_frontier_optimization_did_not_change_any_answer():
     peak memory. Halving memory is not worth a different answer."""
     w = _demo()
     for risk in single_points_of_failure(w, limit=50):
-        assert risk.reach == len(reach(w, risk.entity_id))
+        # `reach` is the whole set; the ranking splits it into what goes alone and what goes
+        # through a quorum group — the two parts together must still be the walk's answer
+        assert risk.reach + risk.through_quorum == len(reach(w, risk.entity_id)), risk.entity_id
 
 
 # ---- virtualization makes redundancy easy to fake ----

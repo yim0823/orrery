@@ -37,6 +37,12 @@ def blast_payload(world: World, entity_id: str, max_hops: int | None = None) -> 
                 "path": br.paths.get(eid, []),
             }
             for eid, hop in sorted(br.impacted.items(), key=lambda kv: (kv[1], kv[0]))
+            if eid not in br.through_quorum
+        ],
+        # in range only if the quorum group named also loses enough other voters
+        "through_quorum": [
+            {"id": eid, "kind": world.entity(eid).kind.value, "group": g, "path": br.paths.get(eid, [])}
+            for eid, g in sorted(br.through_quorum.items())
         ],
     }
 
