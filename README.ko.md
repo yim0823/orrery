@@ -8,6 +8,10 @@
 
 orrery는 그 답을 계산합니다.
 
+**[라이브 데모](https://yim0823.github.io/orrery/)** — 설치 없이 데모 월드를 지도로 봅니다.
+
+**[서버 한 대가 죽는 장면](https://yim0823.github.io/orrery/#simulate=host-a1)** — `simulate host-a1`이 바로 재생됩니다.
+
 ```
 $ orrery blast host-a1
 
@@ -139,7 +143,8 @@ relations:
 간선이 눈앞에서 하드로 바뀝니다.
 
 페이지는 결과를 스스로 계산하지 않습니다. 모든 답이 `--json-out`과 같은 함수에서 나오므로
-그림이 명령과 다른 말을 할 수 없습니다. `orrery map --export map.html`은 모든 답을 미리
+그림이 명령과 다른 말을 할 수 없습니다. [라이브 데모](https://yim0823.github.io/orrery/)가 바로 이것이고,
+`main`에 push될 때마다 데모 월드로 다시 만들어집니다. `orrery map --export map.html`은 모든 답을 미리
 계산해 넣은 파일 하나를 씁니다 — 서버도, 네트워크도, 외부에서 받아 오는 것도 없습니다.
 내보내기는 개체 3,000개까지이고, 그보다 크면 서버로 띄우십시오. 서버는 `--host`로 따로
 지정하지 않는 한 루프백에만 바인딩합니다. 인프라 지도는 지켜야 할 문서이기 때문입니다.
