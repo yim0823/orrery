@@ -1,0 +1,66 @@
+name: pages
+
+# The live demo: the synthetic demo world, exported with `orrery map --export`.
+#
+# Only `fixtures/demo-world.yaml` is ever exported here. The path is fixed on purpose: this
+# job publishes whatever it exports to a public URL, and a map of a real estate is exactly
+# the document that must never go out this way. Anything else belongs in `orrery map` on
+# loopback, or an export that stays on the machine that made it.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install
+        run: uv sync
+
+      - name: Export the demo world, and only the demo world
+        run: |
+          mkdir -p _site
+          uv run orrery ingest fixtures/demo-world.yaml --out "$RUNNER_TEMP/demo.yaml"
+          uv run orrery map --world "$RUNNER_TEMP/demo.yaml" --export _site/index.html
+
+      # Built on pull requests too, so a change that breaks the export is caught before it
+      # reaches main. Only main deploys.
+      - name: Upload
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

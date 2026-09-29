@@ -15,6 +15,13 @@ thing and its twin quietly not.
 
 ### Added
 
+- **A live demo on GitHub Pages.** `.github/workflows/pages.yml` exports the demo world
+  with `orrery map --export` on every push to `main` and publishes it, so the map can be
+  tried from a link instead of a clone. The fixture path is fixed in the workflow: a job
+  that publishes what it exports must never be pointed at a real estate. Pull requests
+  build the export without deploying it, so a change that breaks it fails before `main`.
+  `#simulate=<id>`, `#blast=<id>` and `#<id>` link straight to an answer.
+
 - **`orrery map`: the map, drawn.** A read-only page, served on loopback from the standard
   library, that draws the estate as an orrery — foundations at the core, the call layer at
   the rim, each thing inside the wedge of what it stands on. Select anything and simulate

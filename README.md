@@ -14,6 +14,10 @@ range of a failure, and what actually goes down once redundancy and failover are
 into account. It models one thing failing, not a change being applied — "reboot this
 host" is expressed as that host going down.
 
+**[Live demo](https://yim0823.github.io/orrery/)** — the demo world, drawn; nothing to install.
+
+**[Watch one host fail](https://yim0823.github.io/orrery/#simulate=host-a1)** — the same, with `simulate host-a1` already running.
+
 > ⚠️ **Early alpha.** The engine works, is tested, and can grade itself against past
 > incidents — but it has not been graded against *yours*, and accuracy is the open
 > question. Expanded in [Project status](#project-status).
@@ -114,7 +118,8 @@ a clock appears, and dragging past it turns the edge hard in front of you.
 
 The page computes no consequence of its own. Every answer comes from the same functions
 behind `--json-out`, so the picture cannot disagree with the command.
-`orrery map --export map.html` writes one self-contained file with every answer
+The [live demo](https://yim0823.github.io/orrery/) is exactly this, built from the demo world on every
+push to `main`. `orrery map --export map.html` writes one self-contained file with every answer
 precomputed — no server, no network, nothing fetched — for a map you want to hand to
 someone. Exports stop at 3,000 entities; beyond that, serve it. The server binds to
 loopback unless `--host` says otherwise, because a map of an estate is a document worth
